@@ -1,0 +1,14 @@
+{
+  "name": "Now Mode",
+  "short_name": "Now Mode",
+  "description": "ADHD planner — amplify your ADHD superpower. One thing now.",
+  "start_url": "/SparkAppDemo/",
+  "scope": "/SparkAppDemo/",
+  "display": "standalone",
+  "background_color": "#0F1419",
+  "theme_color": "#0F1419",
+  "icons": [
+    { "src": "/SparkAppDemo/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/SparkAppDemo/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
