@@ -1,0 +1,11 @@
+import{c as r,r as d,j as e,B as a,k as s}from"./index-BxLvZRAk.js";import{S as n}from"./ScreenHeader-CsTvjmWE.js";/**
+ * @license lucide-react v0.575.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const l=[["rect",{width:"14",height:"14",x:"8",y:"8",rx:"2",ry:"2",key:"17jyea"}],["path",{d:"M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2",key:"zix9uf"}]],x=r("copy",l);/**
+ * @license lucide-react v0.575.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const h=[["path",{d:"m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7",key:"132q7q"}],["rect",{x:"2",y:"4",width:"20",height:"16",rx:"2",key:"izxlao"}]],o=r("mail",h),p="hello@nowmode.app";function y(){const[t,c]=d.useState("");return e.jsxs("div",{className:"pb-10",children:[e.jsx(n,{back:!0,title:"Send feedback"}),e.jsxs("div",{className:"space-y-4 px-5",children:[e.jsx("p",{className:"text-sm text-muted-foreground",children:"What helps? What gets in the way? Half-formed thoughts are welcome."}),e.jsx("textarea",{value:t,onChange:i=>c(i.target.value),rows:7,placeholder:"I wish Now Mode could…",className:"w-full resize-none rounded-2xl border border-border2 bg-card px-4 py-3 text-[15px] placeholder:text-dim focus:border-blue focus:outline-none","aria-label":"Your feedback"}),e.jsxs("div",{className:"grid grid-cols-2 gap-3",children:[e.jsxs(a,{variant:"secondary",size:"lg",className:"h-12 rounded-xl",disabled:!t.trim(),onClick:async()=>{try{await navigator.clipboard.writeText(t),s("Copied",{description:"Paste it wherever is easiest."})}catch{s("Couldn't copy",{description:"Select the text and copy it manually."})}},children:[e.jsx(x,{})," Copy"]}),e.jsx(a,{size:"lg",className:"h-12 rounded-xl font-semibold",disabled:!t.trim(),asChild:!!t.trim(),children:t.trim()?e.jsxs("a",{href:`mailto:${p}?subject=${encodeURIComponent("Now Mode feedback")}&body=${encodeURIComponent(t)}`,children:[e.jsx(o,{})," Email it"]}):e.jsxs("span",{children:[e.jsx(o,{})," Email it"]})})]}),e.jsx("p",{className:"text-center text-xs text-dim",children:"Thank you for shaping Now Mode."})]})]})}export{y as component};

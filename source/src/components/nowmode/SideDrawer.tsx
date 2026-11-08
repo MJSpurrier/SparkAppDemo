@@ -1,0 +1,117 @@
+import { Link } from "@tanstack/react-router";
+import { CalendarDays, HandHeart, Home, MessageSquareText, Sparkles, Target, UserRound, Waypoints, X } from "lucide-react";
+import { useEffect } from "react";
+
+import { useNowMode } from "@/lib/nowmode/store";
+import { toDateKey } from "@/lib/nowmode/logic";
+import { Logo } from "./Logo";
+import { useUI } from "./ui-context";
+
+const rail = [
+  { to: "/", label: "Today", icon: Home },
+  { to: "/calendar", label: "Calendar", icon: CalendarDays },
+  { to: "/board", label: "Board", icon: Waypoints },
+  { to: "/focus", label: "Focus", icon: Target },
+] as const;
+
+const destinations = [
+  { to: "/account", label: "Account", hint: "Profile, nudges, quiet hours", icon: UserRound },
+  { to: "/mission", label: "Our Mission", hint: "Why Now Mode exists", icon: Sparkles },
+  { to: "/support", label: "Support Now Mode", hint: "Optional, always", icon: HandHeart },
+  { to: "/feedback", label: "Send feedback", hint: "Tell us what helps", icon: MessageSquareText },
+] as const;
+
+export function SideDrawer() {
+  const { drawerOpen, setDrawerOpen } = useUI();
+  const { state } = useNowMode();
+  const close = () => setDrawerOpen(false);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setDrawerOpen(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [drawerOpen, setDrawerOpen]);
+
+  if (!drawerOpen) return null;
+  const winsToday = state.wins.filter((w) => w.date === toDateKey(new Date())).length;
+
+  return (
+    <div className="absolute inset-0 z-40" role="dialog" aria-modal="true" aria-label="Menu">
+      <button
+        type="button"
+        aria-label="Close menu"
+        onClick={close}
+        className="animate-fade-soft absolute inset-0 bg-ink/70 backdrop-blur-[2px]"
+      />
+      <aside className="animate-drawer-in absolute inset-y-0 left-0 flex w-[80%] border-r border-border bg-bg2 shadow-shell">
+        {/* Server-style rail */}
+        <div className="flex w-[68px] shrink-0 flex-col items-center gap-3 border-r border-border bg-background py-5">
+          <Logo size={44} />
+          <div className="h-px w-8 bg-border2" />
+          {rail.map(({ to, label, icon: Icon }) => (
+            <Link
+              key={to}
+              to={to}
+              onClick={close}
+              aria-label={label}
+              activeOptions={{ exact: true }}
+              className="grid size-11 place-items-center rounded-2xl bg-card text-muted-foreground transition-all hover:rounded-xl hover:text-foreground data-[status=active]:rounded-xl data-[status=active]:bg-blue data-[status=active]:text-primary-foreground"
+            >
+              <Icon className="size-5" strokeWidth={1.8} />
+            </Link>
+          ))}
+        </div>
+
+        {/* Channel column */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-center justify-between border-b border-border px-4 py-5">
+            <div className="min-w-0">
+              <p className="truncate text-base font-bold">Now Mode</p>
+              <p className="truncate text-xs text-muted-foreground">One thing at a time</p>
+            </div>
+            <button
+              type="button"
+              aria-label="Close menu"
+              onClick={close}
+              className="grid size-8 shrink-0 place-items-center rounded-lg text-dim hover:bg-card hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+
+          <nav className="flex-1 overflow-y-auto px-2 py-4" aria-label="More">
+            <p className="px-2 pb-2 text-[11px] font-bold uppercase tracking-wider text-dim">You &amp; Now Mode</p>
+            <ul className="space-y-1">
+              {destinations.map(({ to, label, hint, icon: Icon }) => (
+                <li key={to}>
+                  <Link
+                    to={to}
+                    onClick={close}
+                    className="flex items-center gap-3 rounded-xl px-2 py-2.5 text-muted-foreground transition-colors hover:bg-card hover:text-foreground data-[status=active]:bg-card2 data-[status=active]:text-foreground"
+                  >
+                    <Icon className="size-[18px] shrink-0" strokeWidth={1.8} />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold">{label}</span>
+                      <span className="block truncate text-[11px] text-dim">{hint}</span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          <div className="flex items-center gap-3 border-t border-border bg-background/60 px-4 py-3">
+            <div className="grid size-9 shrink-0 place-items-center rounded-full bg-card2 text-sm font-bold text-teal">
+              Y
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">You</p>
+              <p className="truncate text-[11px] text-green">● {winsToday} gentle wins today</p>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  );
+}
