@@ -3,6 +3,7 @@ import { HandHeart } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { useT } from "@/lib/i18n/context";
 import { ScreenHeader } from "@/components/nowmode/ScreenHeader";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ export const Route = createFileRoute("/support")({
 const PRESETS = [3, 5, 10];
 
 function Support() {
+  const t = useT();
   const [freq, setFreq] = useState<"once" | "monthly">("once");
   const [amount, setAmount] = useState<number | "custom">(5);
   const [custom, setCustom] = useState("");
@@ -31,7 +33,7 @@ function Support() {
 
   return (
     <div className="pb-10">
-      <ScreenHeader back title="Support Now Mode" />
+      <ScreenHeader back title={t("nav.support")} />
       <div className="space-y-5 px-5">
         <section className="rounded-[20px] border border-border2 bg-hero p-5">
           <HandHeart className="size-6 text-coral" />

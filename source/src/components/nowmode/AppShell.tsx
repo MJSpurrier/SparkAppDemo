@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { AddSheet } from "./AddSheet";
 import { ScheduleDialog } from "./ScheduleDialog";
+import { StepEditor } from "./StepEditor";
 import { SideDrawer } from "./SideDrawer";
 import { TabBar } from "./TabBar";
 import { TimerSwitchDialog } from "./TimerSwitchDialog";
@@ -15,6 +16,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <main className="no-scrollbar h-full overflow-y-auto">{children}</main>
           <AddSheet />
           <ScheduleDialog />
+          <StepEditor />
           <TimerSwitchDialog />
         </div>
         <TabBar />

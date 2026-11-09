@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Compass, Feather, HeartHandshake, Zap } from "lucide-react";
 
+import { useT } from "@/lib/i18n/context";
 import { Logo } from "@/components/nowmode/Logo";
 import { ScreenHeader } from "@/components/nowmode/ScreenHeader";
 
@@ -26,9 +27,10 @@ const beliefs = [
 ];
 
 function Mission() {
+  const t = useT();
   return (
     <div className="pb-10">
-      <ScreenHeader back title="Our Mission" />
+      <ScreenHeader back title={t("nav.mission")} />
       <div className="space-y-5 px-5">
         <section className="rounded-[20px] border border-border2 bg-hero p-6">
           <Logo size={44} />

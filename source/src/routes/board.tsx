@@ -3,6 +3,7 @@ import { ImageIcon, Link2, Play, Plus, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { toast } from "sonner";
 
+import { useT } from "@/lib/i18n/context";
 import { Loading } from "@/components/nowmode/Loading";
 import { Pill, ScreenHeader } from "@/components/nowmode/ScreenHeader";
 import { useUI } from "@/components/nowmode/ui-context";
@@ -38,6 +39,7 @@ interface Drag {
 }
 
 function BoardScreen() {
+  const t = useT();
   const { ready, state, moveCard, removeCard, addLink, removeLink } = useNowMode();
   const { openSheet } = useUI();
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -104,7 +106,7 @@ function BoardScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      <ScreenHeader title="Board" right={<Pill>Drag · pin · connect</Pill>} />
+      <ScreenHeader title={t("nav.board")} right={<Pill>{t("board.hint")}</Pill>} />
 
       <div className="relative mx-5 min-h-0 flex-1 overflow-hidden rounded-[20px] border border-border2 bg-cork shadow-card">
         <div className="cork-grain pointer-events-none absolute inset-0" />

@@ -3,6 +3,7 @@ import { Copy, Mail } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { useT } from "@/lib/i18n/context";
 import { ScreenHeader } from "@/components/nowmode/ScreenHeader";
 import { Button } from "@/components/ui/button";
 
@@ -24,11 +25,12 @@ export const Route = createFileRoute("/feedback")({
 const FEEDBACK_EMAIL = "hello@nowmode.app";
 
 function Feedback() {
+  const t = useT();
   const [text, setText] = useState("");
 
   return (
     <div className="pb-10">
-      <ScreenHeader back title="Send feedback" />
+      <ScreenHeader back title={t("nav.feedback")} />
       <div className="space-y-4 px-5">
         <p className="text-sm text-muted-foreground">
           What helps? What gets in the way? Half-formed thoughts are welcome.

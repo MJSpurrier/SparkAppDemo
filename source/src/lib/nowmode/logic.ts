@@ -137,12 +137,11 @@ export function splitIntoSteps(title: string): Step[] {
   ];
 }
 
-/** Toggle a micro-step; when every step is done the parent event is marked done too. */
+/** Toggle a step. The parent stays unfinished until the person marks it done. */
 export function toggleStep(ev: NowEvent, stepId: string): NowEvent {
   if (!ev.steps) return ev;
   const steps = ev.steps.map((s) => (s.id === stepId ? { ...s, done: !s.done } : s));
-  const allDone = steps.length > 0 && steps.every((s) => s.done);
-  return { ...ev, steps, done: allDone };
+  return { ...ev, steps };
 }
 
 export const NUDGE_TIERS = [

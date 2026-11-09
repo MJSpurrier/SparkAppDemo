@@ -141,6 +141,55 @@
   color-scheme: dark;
 }
 
+[data-theme="light"] {
+  color-scheme: light;
+  --background: oklch(0.97 0.012 250);
+  --bg2: oklch(0.94 0.016 250);
+  --card: oklch(0.995 0.004 250);
+  --card2: oklch(0.93 0.02 250);
+  --border: oklch(0.86 0.02 250);
+  --border2: oklch(0.8 0.03 250);
+  --foreground: oklch(0.28 0.03 255);
+  --cream: oklch(0.99 0.005 95);
+  --ink: oklch(0.22 0.03 255);
+  --muted-foreground: oklch(0.42 0.03 255);
+  --dim: oklch(0.48 0.03 255);
+  --primary-foreground: oklch(0.98 0.01 250);
+  --popover: var(--card);
+  --secondary: var(--card2);
+  --gradient-hero: linear-gradient(165deg, oklch(0.94 0.03 240) 0%, var(--card) 58%, var(--bg2) 100%);
+  --gradient-focus: radial-gradient(120% 70% at 50% 0%, oklch(0.93 0.04 240) 0%, var(--background) 70%);
+  --gradient-rest: linear-gradient(180deg, oklch(0.94 0.04 165 / 0.7), oklch(0.96 0.02 200 / 0.5));
+  --shadow-card: 0 10px 24px -16px oklch(0.3 0.04 250 / 0.45);
+  --shadow-shell: 0 24px 50px -24px oklch(0.3 0.04 250 / 0.35);
+}
+
+[data-palette="lavender"] {
+  --blue: oklch(0.58 0.16 305);
+  --teal: oklch(0.72 0.09 325);
+  --primary: var(--blue);
+  --ring: var(--blue);
+  --primary-foreground: oklch(0.98 0.01 300);
+}
+
+[data-palette="forest"] {
+  --blue: oklch(0.55 0.11 155);
+  --teal: oklch(0.68 0.09 175);
+  --primary: var(--blue);
+  --ring: var(--blue);
+  --primary-foreground: oklch(0.98 0.01 150);
+}
+
+[data-theme="light"][data-palette="lavender"] {
+  --blue: oklch(0.52 0.16 305);
+  --teal: oklch(0.58 0.1 325);
+}
+
+[data-theme="light"][data-palette="forest"] {
+  --blue: oklch(0.48 0.11 155);
+  --teal: oklch(0.52 0.09 175);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);

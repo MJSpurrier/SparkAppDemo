@@ -41,13 +41,13 @@ describe("split task", () => {
   it("creates exactly 3 micro-steps", () => {
     expect(splitIntoSteps("Draft brief")).toHaveLength(3);
   });
-  it("marks the parent done once all steps are done", () => {
+  it("keeps the parent unfinished even when every step is checked", () => {
     let ev: NowEvent = { ...base, steps: splitIntoSteps(base.title) };
     ev = toggleStep(ev, ev.steps![0]!.id);
     ev = toggleStep(ev, ev.steps![1]!.id);
-    expect(ev.done).toBe(false);
     ev = toggleStep(ev, ev.steps![2]!.id);
-    expect(ev.done).toBe(true);
+    expect(ev.steps!.every((s) => s.done)).toBe(true);
+    expect(ev.done).toBe(false);
   });
 });
 

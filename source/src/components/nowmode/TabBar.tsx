@@ -1,19 +1,22 @@
 import { Link } from "@tanstack/react-router";
 import { CalendarDays, Home, Plus, Target, Waypoints } from "lucide-react";
 
+import { useT } from "@/lib/i18n/context";
+import type { MessageKey } from "@/lib/i18n/messages";
 import { cn } from "@/lib/utils";
 import { useUI } from "./ui-context";
 
 const left = [
-  { to: "/", label: "Today", icon: Home },
-  { to: "/calendar", label: "Calendar", icon: CalendarDays },
+  { to: "/", label: "nav.today", icon: Home },
+  { to: "/calendar", label: "nav.calendar", icon: CalendarDays },
 ] as const;
 const right = [
-  { to: "/board", label: "Board", icon: Waypoints },
-  { to: "/focus", label: "Focus", icon: Target },
+  { to: "/board", label: "nav.board", icon: Waypoints },
+  { to: "/focus", label: "nav.focus", icon: Target },
 ] as const;
 
-function Tab({ to, label, icon: Icon }: { to: string; label: string; icon: typeof Home }) {
+function Tab({ to, label, icon: Icon }: { to: "/" | "/calendar" | "/board" | "/focus"; label: MessageKey; icon: typeof Home }) {
+  const t = useT();
   return (
     <Link
       to={to}
@@ -21,12 +24,13 @@ function Tab({ to, label, icon: Icon }: { to: string; label: string; icon: typeo
       className="group flex flex-1 flex-col items-center gap-1 py-1 text-[10px] font-medium text-dim transition-colors data-[status=active]:font-semibold data-[status=active]:text-foreground"
     >
       <Icon className="size-[22px]" strokeWidth={1.8} aria-hidden />
-      <span>{label}</span>
+      <span>{t(label)}</span>
     </Link>
   );
 }
 
 export function TabBar() {
+  const t = useT();
   const { sheetOpen, openSheet, closeSheet } = useUI();
   return (
     <nav
@@ -39,7 +43,7 @@ export function TabBar() {
       <div className="flex flex-1 justify-center">
         <button
           type="button"
-          aria-label={sheetOpen ? "Close add sheet" : "Add something"}
+          aria-label={sheetOpen ? t("common.close") : t("nav.add")}
           aria-expanded={sheetOpen}
           onClick={() => (sheetOpen ? closeSheet() : openSheet("all"))}
           className={cn(

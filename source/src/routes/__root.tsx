@@ -6,13 +6,15 @@ import {
   useRouter,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppShell } from "@/components/nowmode/AppShell";
 import { UIProvider } from "@/components/nowmode/ui-context";
 import { Toaster } from "@/components/ui/sonner";
-import { NowModeProvider } from "@/lib/nowmode/store";
+import { LocaleProvider, resolvedLocale } from "@/lib/i18n/context";
+import { applyAppearance, normalizePalette, normalizeTheme } from "@/lib/nowmode/settings";
+import { NowModeProvider, useNowMode } from "@/lib/nowmode/store";
 
 function NotFoundComponent() {
   return (
@@ -78,18 +80,46 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   errorComponent: ErrorComponent,
 });
 
+function Appearance({ children }: { children: ReactNode }) {
+  const { state } = useNowMode();
+  const locale = resolvedLocale(state.prefs.locale, typeof navigator === "undefined" ? "en" : navigator.language);
+  const mode = state.prefs.themeMode
+    ? normalizeTheme(state.prefs.themeMode)
+    : typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: light)").matches
+      ? "light"
+      : "dark";
+  const palette = normalizePalette(state.prefs.palette);
+  useEffect(() => {
+    applyAppearance(mode, palette);
+    document.documentElement.lang = locale === "en" ? "en" : locale;
+  }, [mode, palette, locale]);
+  return <LocaleProvider locale={locale}>{children}</LocaleProvider>;
+}
+
+function ThemedToaster() {
+  const { state } = useNowMode();
+  const mode = state.prefs.themeMode
+    ? normalizeTheme(state.prefs.themeMode)
+    : typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: light)").matches
+      ? "light"
+      : "dark";
+  return <Toaster theme={mode} />;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
       <NowModeProvider>
-        <UIProvider>
-          <AppShell>
-            <Outlet />
-          </AppShell>
-          <Toaster />
-        </UIProvider>
+        <Appearance>
+          <UIProvider>
+            <AppShell>
+              <Outlet />
+            </AppShell>
+            <ThemedToaster />
+          </UIProvider>
+        </Appearance>
       </NowModeProvider>
     </QueryClientProvider>
   );

@@ -3,6 +3,8 @@ import { Bell, BellRing, Check, Clock3, Moon, Scissors, Sparkles, Zap } from "lu
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
+import { useLocale, useT } from "@/lib/i18n/context";
+import { formatLocaleDate, formatLocaleTime } from "@/lib/i18n/format";
 import { barColor } from "@/components/nowmode/colors";
 import { Loading } from "@/components/nowmode/Loading";
 import { Ring } from "@/components/nowmode/Ring";
@@ -12,7 +14,6 @@ import { useUI } from "@/components/nowmode/ui-context";
 import { Button } from "@/components/ui/button";
 import { unlockAlarm } from "@/lib/nowmode/alarm";
 import {
-  ENERGY_COPY,
   NUDGE_TIERS,
   eventsOn,
   formatClock,
@@ -43,6 +44,8 @@ export const Route = createFileRoute("/")({
 const energyLabel: Record<Energy, string> = { low: "Low", okay: "Okay", high: "High" };
 
 function Today() {
+  const t = useT();
+  const locale = useLocale();
   const { ready, state, setEnergy } = useNowMode();
   const now = useNow(1000);
   if (!ready) return <Loading />;
@@ -55,13 +58,13 @@ function Today() {
   const left = today.filter((e) => !e.done && e.id !== up?.id).length;
   const wins = state.wins.filter((w) => w.date === todayKey).length;
   const allClear = !up;
-  const kicker = now.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" }).replace(",", " ·");
+  const kicker = formatLocaleDate(now, locale, { weekday: "long", month: "short", day: "numeric" });
 
   return (
     <div className="pb-8">
       <ScreenHeader
         kicker={kicker}
-        title={allClear ? "All clear" : "One thing now"}
+        title={allClear ? t("today.allClear") : t("today.oneThing")}
         right={
           <span className="inline-flex items-center gap-1 rounded-full border border-border2 bg-card px-3 py-1.5 text-xs font-semibold text-green">
             <Zap className="size-3.5" /> {state.energy ? energyLabel[state.energy] : "Check in"}
@@ -79,18 +82,16 @@ function Today() {
             />
           </div>
           <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">
-              {doneCount} of {today.length} handled
-            </span>
+            <span className="text-muted-foreground">{t("today.handled", { done: doneCount, total: today.length })}</span>
             <span className="inline-flex items-center gap-1 font-semibold text-green">
-              <Sparkles className="size-3.5" /> {wins} gentle {wins === 1 ? "win" : "wins"}
+              <Sparkles className="size-3.5" /> {t(wins === 1 ? "today.win" : "today.wins", { n: wins })}
             </span>
           </div>
         </section>
 
         {/* Energy check-in */}
         <section aria-label="Energy check-in" className="flex items-center gap-2">
-          <span className="mr-1 text-xs text-dim">Battery</span>
+          <span className="mr-1 text-xs text-dim">{t("today.battery")}</span>
           {(["low", "okay", "high"] as Energy[]).map((e) => (
             <button
               key={e}
@@ -104,7 +105,7 @@ function Today() {
                   : "border-border2 bg-card text-muted-foreground hover:bg-card2",
               )}
             >
-              {energyLabel[e]}
+              {t(e === "low" ? "today.low" : e === "okay" ? "today.okay" : "today.high")}
             </button>
           ))}
         </section>
@@ -114,11 +115,11 @@ function Today() {
         {/* Rest of today */}
         <section aria-label="Rest of today" className="space-y-2.5">
           <div className="flex items-center justify-between px-1">
-            <h2 className="text-sm font-semibold">Rest of today</h2>
-            <span className="text-sm text-dim">{left} left</span>
+            <h2 className="text-sm font-semibold">{t("today.rest")}</h2>
+            <span className="text-sm text-dim">{t("today.left", { n: left })}</span>
           </div>
           {rest.length === 0 && (
-            <p className="rounded-2xl border border-border bg-bg2 px-4 py-3 text-sm text-dim">Nothing else today.</p>
+            <p className="rounded-2xl border border-border bg-bg2 px-4 py-3 text-sm text-dim">{t("today.nothingElse")}</p>
           )}
           {rest.map((ev) => (
             <EventRow key={ev.id} ev={ev} />
@@ -130,13 +131,9 @@ function Today() {
             )}
           >
             <p className="flex items-center justify-center gap-1.5 text-sm font-semibold text-green">
-              <Moon className="size-4" /> You're good to rest
+              <Moon className="size-4" /> {t("today.restOk")}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {allClear
-                ? "Everything that needed you today is handled. Permission to stop."
-                : "When the list is clear — permission to stop."}
-            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{allClear ? t("today.restDone") : t("today.restWait")}</p>
           </div>
         </section>
       </div>
@@ -145,8 +142,10 @@ function Today() {
 }
 
 function EventRow({ ev }: { ev: NowEvent }) {
+  const t = useT();
+  const locale = useLocale();
   const { state, toggleDone } = useNowMode();
-  const { openSchedule } = useUI();
+  const { openSchedule, openSteps } = useUI();
   const openTimer = useActivityTimer();
   const flexible = scheduleOf(ev) === "flexible";
   const timerOpen = state.focus.linkedToBlock && state.focus.eventId === ev.id && (state.focus.running || !!state.focus.endPromptFor);
@@ -160,12 +159,12 @@ function EventRow({ ev }: { ev: NowEvent }) {
             <TypeBadge schedule={ev.schedule} />
           </p>
           <p className="text-xs text-dim">
-            {formatTime(ev.time, false)} · {ev.duration <= 5 ? "tiny win" : `${ev.duration} min`}
+            {formatLocaleTime(ev.time, locale)} · {ev.duration} min
           </p>
         </div>
         <button
           type="button"
-          aria-label={ev.done ? `Mark ${ev.title} not done` : `Mark ${ev.title} done`}
+          aria-label={ev.done ? t("today.markNotAria", { title: ev.title }) : t("today.markDoneAria", { title: ev.title })}
           onClick={() => toggleDone(ev.id)}
           className={cn(
             "grid size-8 shrink-0 place-items-center rounded-full border transition-colors",
@@ -178,11 +177,12 @@ function EventRow({ ev }: { ev: NowEvent }) {
       <div className="mt-2 flex gap-2 pl-4">
         {flexible && !ev.done && (
           <RowAction onClick={() => openTimer(ev)}>
-            {timerOpen ? "Open timer" : planBlockTimer(ev, new Date()).ended ? "Add time" : "Timer"}
+            {timerOpen ? t("today.openTimer") : planBlockTimer(ev, new Date()).ended ? t("today.addTime") : t("today.startTimer")}
           </RowAction>
         )}
-        {flexible && <RowAction onClick={() => openSchedule(ev.id)}>Edit time</RowAction>}
-        {!flexible && <RowAction onClick={() => openSchedule(ev.id)}>Reschedule</RowAction>}
+        <RowAction onClick={() => openSteps(ev.id)}>{t("today.split")}</RowAction>
+        {flexible && <RowAction onClick={() => openSchedule(ev.id)}>{t("today.editTime")}</RowAction>}
+        {!flexible && <RowAction onClick={() => openSchedule(ev.id)}>{t("today.reschedule")}</RowAction>}
       </div>
     </div>
   );
@@ -234,24 +234,25 @@ function useActivityTimer() {
 }
 
 function AllClearCard() {
+  const t = useT();
   const { openSheet } = useUI();
   return (
     <section className="rounded-[20px] border border-border2 bg-hero p-5 shadow-card">
-      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-green">All clear</p>
-      <h2 className="mt-1 text-xl font-bold">Nothing left that needs you.</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        That's not luck — that's you. Rest is part of the plan.
-      </p>
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-green">{t("today.allClear")}</p>
+      <h2 className="mt-1 text-xl font-bold">{t("today.clearTitle")}</h2>
+      <p className="mt-1 text-sm text-muted-foreground">{t("today.clearBody")}</p>
       <Button variant="secondary" className="mt-4 h-11 w-full rounded-xl" onClick={() => openSheet("all")}>
-        Capture a thought for later
+        {t("today.capture")}
       </Button>
     </section>
   );
 }
 
 function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
-  const { state, startFocus, toggleDone, splitTask, toggleStep, toggleNudge, previewNudges } = useNowMode();
-  const { openSchedule, askTimer } = useUI();
+  const t = useT();
+  const locale = useLocale();
+  const { state, startFocus, toggleDone, toggleStep, toggleNudge, previewNudges } = useNowMode();
+  const { openSchedule, openSteps, askTimer } = useUI();
   const navigate = useNavigate();
   const openTimer = useActivityTimer();
   const [showNudges, setShowNudges] = useState(false);
@@ -265,7 +266,7 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
   const linked = flexible && f.linkedToBlock && f.eventId === ev.id;
   const personalActive = !flexible && f.eventId === ev.id && !f.linkedToBlock && (f.running || (f.remainingSec < f.totalSec && !f.finished));
   const block = planBlockTimer(ev, now);
-  const energyCopy = state.energy ? ENERGY_COPY[state.energy] : "One thing, then the next.";
+  const energyCopy = state.energy ? t(state.energy === "low" ? "energy.low" : state.energy === "okay" ? "energy.okay" : "energy.high") : t("energy.none");
 
   const goSprint = (minutes: number) => {
     unlockAlarm();
@@ -304,12 +305,12 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
   return (
     <section aria-label="Up next" className="rounded-[20px] border border-border2 bg-hero p-5 shadow-card">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-blue">Up next</p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-blue">{t("today.upNext")}</p>
         <TypeBadge schedule={ev.schedule} />
       </div>
       <h2 className="mt-1 text-[22px] font-bold leading-tight">{ev.title}</h2>
       <p className="mt-0.5 text-sm text-muted-foreground">
-        {ev.tag} · {formatRange(ev)}
+        {ev.tag} · {formatLocaleTime(ev.time, locale)} – {formatLocaleTime(eventEndClock(ev), locale)}
       </p>
 
       <div className="mt-4 flex items-center gap-4">
@@ -325,14 +326,14 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
         </Ring>
         <div className="min-w-0">
           <p className="text-[32px] font-bold tabular-nums leading-none tracking-tight">
-            {showCountdown ? formatMMSS(shownRemaining) : formatTime(ev.time, false)}
+            {showCountdown ? formatMMSS(shownRemaining) : formatLocaleTime(ev.time, locale)}
           </p>
           <p className="mt-1.5 text-xs text-muted-foreground">
             {flexible
               ? block.ended
-                ? `Ended ${formatTime(eventEndClock(ev), false)} · clock ${formatClock(now)}`
-                : `until ${formatTime(eventEndClock(ev), false)} · clock ${formatClock(now)}`
-              : `of ${ev.duration}-min · clock ${formatClock(now)}`}
+                ? t("today.ended", { time: formatLocaleTime(eventEndClock(ev), locale), clock: formatLocaleTime(`${now.getHours()}:${now.getMinutes()}`, locale) })
+                : t("today.until", { time: formatLocaleTime(eventEndClock(ev), locale), clock: formatLocaleTime(`${now.getHours()}:${now.getMinutes()}`, locale) })
+              : t("today.ofMin", { n: ev.duration, clock: formatLocaleTime(`${now.getHours()}:${now.getMinutes()}`, locale) })}
           </p>
         </div>
       </div>
@@ -342,28 +343,25 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
       <div className="mt-4 grid grid-cols-2 gap-3">
         {flexible ? (
           <Button size="lg" className="h-11 rounded-xl text-[15px] font-semibold" onClick={() => openTimer(ev)}>
-            {linked && (f.running || f.endPromptFor) ? "Open timer" : block.ended ? "Add time" : "Start timer"}
+            {linked && (f.running || f.endPromptFor) ? t("today.openTimer") : block.ended ? t("today.addTime") : t("today.startTimer")}
           </Button>
         ) : (
           <Button size="lg" className="h-11 rounded-xl text-[15px] font-semibold" onClick={goPersonal}>
-            {personalActive ? "Back to focus" : "Start focus"}
+            {personalActive ? t("today.backFocus") : t("today.startFocus")}
           </Button>
         )}
         <Button
           variant="secondary"
           size="lg"
           className="h-11 rounded-xl text-[15px] font-semibold"
-          onClick={() => {
-            if (ev.steps?.length) toast("Already split", { description: "Tick off the steps below." });
-            else splitTask(ev.id);
-          }}
+          onClick={() => openSteps(ev.id)}
         >
-          <Scissors /> Split task
+          <Scissors /> {t("today.split")}
         </Button>
       </div>
       {!flexible && (
         <Button variant="secondary" className="mt-2 h-10 w-full rounded-xl" onClick={() => openSchedule(ev.id)}>
-          Reschedule
+          {t("today.reschedule")}
         </Button>
       )}
       {flexible && (
@@ -372,22 +370,22 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
           onClick={() => openSchedule(ev.id)}
           className="mt-2 text-xs font-semibold text-muted-foreground underline-offset-2 hover:underline"
         >
-          Edit time
+          {t("today.editTime")}
         </button>
       )}
       <div className="mt-2 grid grid-cols-3 gap-2">
         <GhostBtn onClick={() => goSprint(2)} icon={<Clock3 className="size-3.5" />}>
-          Just 2 min
+          {t("today.just2")}
         </GhostBtn>
         <GhostBtn onClick={() => toggleDone(ev.id)} icon={<Check className="size-3.5" />}>
-          Mark done
+          {t("today.markDone")}
         </GhostBtn>
         <GhostBtn
           onClick={() => setShowNudges((v) => !v)}
           icon={<Bell className="size-3.5" />}
           active={showNudges}
         >
-          Nudges
+          {t("today.nudges")}
         </GhostBtn>
       </div>
 

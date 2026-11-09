@@ -1,7 +1,9 @@
+import { useT } from "@/lib/i18n/context";
 import type { ScheduleType } from "@/lib/nowmode/types";
 import { cn } from "@/lib/utils";
 
 export function TypeBadge({ schedule }: { schedule?: ScheduleType | null }) {
+  const t = useT();
   const flexible = schedule === "flexible";
   return (
     <span
@@ -10,7 +12,7 @@ export function TypeBadge({ schedule }: { schedule?: ScheduleType | null }) {
         flexible ? "border-teal/40 text-teal" : "border-border2 text-dim",
       )}
     >
-      {flexible ? "Flexible" : "Fixed"}
+      {flexible ? t("badge.flexible") : t("badge.fixed")}
     </span>
   );
 }
@@ -24,10 +26,11 @@ export function ScheduleTypeField({
   onChange: (value: ScheduleType) => void;
   name?: string;
 }) {
+  const t = useT();
   const helpId = `${name}-help`;
   return (
     <fieldset aria-describedby={helpId}>
-      <legend className="text-xs font-semibold text-foreground">What kind of plan is this?</legend>
+      <legend className="text-xs font-semibold text-foreground">{t("kind.legend")}</legend>
       <div className="mt-2 grid grid-cols-2 gap-2">
         {(
           [
@@ -52,14 +55,13 @@ export function ScheduleTypeField({
                 onChange={() => onChange(option)}
                 className="sr-only"
               />
-              {label}
+              {option === "flexible" ? t("badge.flexible") : t("badge.fixed")}
             </label>
           );
         })}
       </div>
       <p id={helpId} className="mt-2 text-xs leading-relaxed text-muted-foreground">
-        Flexible can run long with the timer, like guitar practice from 2:00 to 3:00. Fixed is an appointment or
-        meeting. It stays put unless you reschedule it.
+        {t("kind.help")}
       </p>
     </fieldset>
   );

@@ -1,1 +1,0 @@
-import{j as e}from"./index-CenheV24.js";function s(){return e.jsx("div",{className:"grid h-full place-items-center","aria-busy":"true",children:e.jsx("span",{className:"size-3 animate-breathe rounded-full bg-blue"})})}export{s as L};

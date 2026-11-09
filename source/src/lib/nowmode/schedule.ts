@@ -1,5 +1,5 @@
 import { eventDate, formatTime, toDateKey } from "./logic";
-import type { AppState, FocusState, NowEvent, ScheduleType } from "./types";
+import type { AppState, FocusState, NowEvent, ScheduleType, Win } from "./types";
 
 export const MAX_BLOCK_MINUTES = 12 * 60;
 
@@ -213,6 +213,21 @@ export function defaultFocus(partial: Partial<FocusState> = {}): FocusState {
   };
 }
 
+function isWinLike(w: Partial<Win> | null | undefined): w is Partial<Win> & Pick<Win, "id" | "label"> {
+  return !!w && typeof w.id === "string" && typeof w.label === "string";
+}
+
+export function migrateWin(raw: Partial<Win> & Pick<Win, "id" | "label">): Win {
+  return {
+    id: raw.id,
+    label: raw.label,
+    date: typeof raw.date === "string" ? raw.date : "2026-01-01",
+    kind: raw.kind === "big" ? "big" : "small",
+    note: typeof raw.note === "string" && raw.note.trim() ? raw.note : undefined,
+    eventId: typeof raw.eventId === "string" ? raw.eventId : undefined,
+  };
+}
+
 function isEventLike(e: Partial<NowEvent> | null | undefined): e is Partial<NowEvent> & Pick<NowEvent, "id" | "title" | "date" | "time"> {
   return !!e && typeof e.id === "string" && typeof e.title === "string" && typeof e.date === "string" && typeof e.time === "string";
 }
@@ -302,7 +317,7 @@ export function migrateAppState(raw: unknown, now = Date.now()): AppState | null
     links: Array.isArray(parsed.links) ? parsed.links : [],
     prefs: { ...defaultPrefs, ...parsed.prefs },
     energy: parsed.energy ?? null,
-    wins: Array.isArray(parsed.wins) ? parsed.wins : [],
+    wins: Array.isArray(parsed.wins) ? parsed.wins.filter(isWinLike).map(migrateWin) : [],
     focus,
     firedNudges: Array.isArray(parsed.firedNudges) ? parsed.firedNudges : [],
   };

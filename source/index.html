@@ -1,6 +1,20 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en" class="dark" data-theme="dark" data-palette="ocean">
   <head>
+    <script>
+      try {
+        var raw = localStorage.getItem("nowmode-v1");
+        var prefs = raw ? JSON.parse(raw).prefs || {} : {};
+        var mode = prefs.themeMode === "light" || prefs.themeMode === "dark" ? prefs.themeMode : (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+        var palette = prefs.palette === "lavender" || prefs.palette === "forest" ? prefs.palette : "ocean";
+        var locale = prefs.locale === "es-419" || prefs.locale === "es-ES" || prefs.locale === "en" ? prefs.locale : "en";
+        document.documentElement.dataset.theme = mode;
+        document.documentElement.dataset.palette = palette;
+        document.documentElement.lang = locale;
+        document.documentElement.classList.toggle("dark", mode === "dark");
+        document.documentElement.style.colorScheme = mode;
+      } catch (e) {}
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#0F1419" />
