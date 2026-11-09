@@ -1,12 +1,17 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 import { barColor } from "@/components/nowmode/colors";
 import { Loading } from "@/components/nowmode/Loading";
 import { IconButton, MenuButton } from "@/components/nowmode/ScreenHeader";
+import { TypeBadge } from "@/components/nowmode/ScheduleTypeField";
+import { useUI } from "@/components/nowmode/ui-context";
+import { unlockAlarm } from "@/lib/nowmode/alarm";
 import { countByDate, eventsOn, formatTime, toDateKey } from "@/lib/nowmode/logic";
+import { focusSwitchGate, planBlockTimer, scheduleOf } from "@/lib/nowmode/schedule";
 import { useNowMode } from "@/lib/nowmode/store";
+import type { NowEvent } from "@/lib/nowmode/types";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/calendar")({
@@ -109,10 +114,32 @@ function CalendarScreen() {
 }
 
 function DayList({ dateKey, onBack }: { dateKey: string; onBack: () => void }) {
-  const { state, toggleDone } = useNowMode();
+  const { state, toggleDone, startLinkedTimer, resumeFocus } = useNowMode();
+  const { openSchedule, askTimer } = useUI();
+  const navigate = useNavigate();
   const [y = 2026, m = 1, d = 1] = dateKey.split("-").map(Number);
   const date = new Date(y, m - 1, d);
   const list = eventsOn(state.events, dateKey);
+
+  const openTimer = (ev: NowEvent) => {
+    unlockAlarm();
+    const f = state.focus;
+    const gate = focusSwitchGate(f, ev.id);
+    if (gate === "confirm") {
+      askTimer({ kind: "block", eventId: ev.id });
+      return;
+    }
+    if (!(f.endPromptFor && f.eventId === ev.id)) {
+      if (gate === "same" && f.running) {
+        /* keep the countdown */
+      } else if (gate === "same" && f.linkedToBlock && !f.running && f.remainingSec > 0 && f.remainingSec < f.totalSec) {
+        resumeFocus();
+      } else if (!(gate === "same" && f.running)) {
+        startLinkedTimer(ev.id);
+      }
+    }
+    navigate({ to: "/focus" });
+  };
 
   return (
     <div className="pb-8">
@@ -135,31 +162,69 @@ function DayList({ dateKey, onBack }: { dateKey: string; onBack: () => void }) {
             Nothing planned. Open space is allowed.
           </li>
         )}
-        {list.map((ev) => (
-          <li key={ev.id} className="flex items-center gap-3 rounded-2xl border border-border bg-card px-3 py-3">
-            <span className="w-16 shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
-              {formatTime(ev.time)}
-            </span>
-            <span className={cn("h-8 w-1 shrink-0 rounded-full", barColor[ev.color], ev.done && "opacity-40")} />
-            <div className="min-w-0 flex-1">
-              <p className={cn("truncate text-sm font-semibold", ev.done && "text-dim line-through")}>{ev.title}</p>
-              <p className="text-xs text-dim">
-                {ev.tag} · {ev.duration} min
-              </p>
-            </div>
-            <button
-              type="button"
-              aria-label={ev.done ? `Mark ${ev.title} not done` : `Mark ${ev.title} done`}
-              onClick={() => toggleDone(ev.id)}
-              className={cn(
-                "grid size-8 shrink-0 place-items-center rounded-full border",
-                ev.done ? "border-green/50 bg-green/15 text-green" : "border-border2 text-dim",
-              )}
-            >
-              <Check className="size-4" />
-            </button>
-          </li>
-        ))}
+        {list.map((ev) => {
+          const flexible = scheduleOf(ev) === "flexible";
+          const timerOpen = state.focus.linkedToBlock && state.focus.eventId === ev.id && (state.focus.running || !!state.focus.endPromptFor);
+          return (
+            <li key={ev.id} className="rounded-2xl border border-border bg-card px-3 py-3">
+              <div className="flex items-center gap-3">
+                <span className="w-16 shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
+                  {formatTime(ev.time)}
+                </span>
+                <span className={cn("h-8 w-1 shrink-0 rounded-full", barColor[ev.color], ev.done && "opacity-40")} />
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-2">
+                    <span className={cn("truncate text-sm font-semibold", ev.done && "text-dim line-through")}>{ev.title}</span>
+                    <TypeBadge schedule={ev.schedule} />
+                  </p>
+                  <p className="text-xs text-dim">
+                    {ev.tag} · {ev.duration} min
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  aria-label={ev.done ? `Mark ${ev.title} not done` : `Mark ${ev.title} done`}
+                  onClick={() => toggleDone(ev.id)}
+                  className={cn(
+                    "grid size-8 shrink-0 place-items-center rounded-full border",
+                    ev.done ? "border-green/50 bg-green/15 text-green" : "border-border2 text-dim",
+                  )}
+                >
+                  <Check className="size-4" />
+                </button>
+              </div>
+              <div className="mt-2 flex gap-2 pl-[4.75rem]">
+                {flexible && !ev.done && (
+                  <button
+                    type="button"
+                    onClick={() => openTimer(ev)}
+                    className="rounded-lg border border-border2 px-2.5 py-1 text-xs font-semibold text-muted-foreground"
+                  >
+                      {timerOpen ? "Open timer" : planBlockTimer(ev, new Date()).ended ? "Add time" : "Timer"}
+                  </button>
+                )}
+                {flexible && (
+                  <button
+                    type="button"
+                    onClick={() => openSchedule(ev.id)}
+                    className="rounded-lg border border-border2 px-2.5 py-1 text-xs font-semibold text-muted-foreground"
+                  >
+                    Edit time
+                  </button>
+                )}
+                {!flexible && (
+                  <button
+                    type="button"
+                    onClick={() => openSchedule(ev.id)}
+                    className="rounded-lg border border-border2 px-2.5 py-1 text-xs font-semibold text-foreground"
+                  >
+                    Reschedule
+                  </button>
+                )}
+              </div>
+            </li>
+          );
+        })}
       </ol>
     </div>
   );

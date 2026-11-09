@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
+import { playBlockChime } from "./alarm";
 import {
   NUDGE_TIERS,
   eventDate,
@@ -11,8 +12,25 @@ import {
   uid,
   type NudgeKey,
 } from "./logic";
+import {
+  applyReschedule,
+  clearFiredFor,
+  conflictMessage,
+  defaultFocus,
+  eventStartMs,
+  eventEndMs,
+  fixedConflict,
+  migrateAppState,
+  planBlockTimer,
+  planExtension,
+  scheduleOf,
+  slotChanged,
+  normalizeTime,
+  validateSlot,
+  type SlotInput,
+} from "./schedule";
 import { createSeed } from "./seed";
-import type { AppState, BoardCard, Energy, FocusState, NowEvent, Prefs } from "./types";
+import type { AppState, BoardCard, Energy, FocusState, NowEvent, Prefs, ScheduleType } from "./types";
 
 export const STORAGE_KEY = "nowmode-v1";
 
@@ -23,20 +41,18 @@ export const FOCUS_PRESETS = [
   { id: "custom", label: "Custom", minutes: 10 },
 ] as const;
 
+export type ExtendResult =
+  | { ok: true }
+  | { ok: false; message: string; reason?: "conflict"; minutes?: number };
+
+export type ScheduleInput = SlotInput & { schedule: ScheduleType };
+
 function load(): AppState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as Partial<AppState>;
-      if (parsed && parsed.version === 1) {
-        const seed = createSeed();
-        return {
-          ...seed,
-          ...parsed,
-          prefs: { ...seed.prefs, ...parsed.prefs },
-          focus: { ...seed.focus, ...parsed.focus },
-        } as AppState;
-      }
+      const migrated = migrateAppState(JSON.parse(raw));
+      if (migrated) return migrated;
     }
   } catch {
     /* fall through to seed */
@@ -70,6 +86,7 @@ function extendFocusState(f: FocusState, min: number): FocusState {
     running: true,
     endsAt: Date.now() + remaining * 1000,
     finished: false,
+    endPromptFor: null,
     twoMinNotified: remaining <= 120,
   };
 }
@@ -84,13 +101,14 @@ interface StartFocusOpts {
   eventId?: string | null;
   label?: string;
   presetId?: string;
+  linkedToBlock?: boolean;
 }
 
 interface Store {
   ready: boolean;
   state: AppState;
   setEnergy: (e: Energy) => void;
-  addEvent: (e: Omit<NowEvent, "id" | "done" | "nudges"> & Partial<Pick<NowEvent, "nudges">>) => NowEvent;
+  addEvent: (e: Omit<NowEvent, "id" | "done" | "nudges" | "schedule"> & Partial<Pick<NowEvent, "nudges" | "schedule">>) => NowEvent;
   toggleDone: (id: string) => void;
   splitTask: (id: string) => void;
   toggleStep: (eventId: string, stepId: string) => void;
@@ -109,6 +127,13 @@ interface Store {
   resumeFocus: () => void;
   resetFocus: () => void;
   extendFocus: (min: number) => void;
+  startLinkedTimer: (eventId: string) => { ok: true; ended: boolean } | { ok: false; message: string };
+  extendLinked: (minutes: number, force?: boolean) => ExtendResult;
+  finishLinked: () => void;
+  dismissEndPrompt: () => void;
+  endLinked: () => void;
+  releaseLinked: () => void;
+  commitSchedule: (id: string, input: ScheduleInput) => { ok: true } | { ok: false; message: string };
   setBodyDouble: (on: boolean) => void;
   checkIn: (choice: "good" | "more") => void;
   resetAll: () => void;
@@ -122,6 +147,9 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const warnedDeadline = useRef<number | null>(null);
+  const ringing = useRef<number | null>(null);
+  const unlinkedDone = useRef<number | null>(null);
 
   useEffect(() => {
     setState(load());
@@ -152,28 +180,115 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, wins: [...s.wins, { id: uid(), date: toDateKey(new Date()), label }] }));
   }, []);
 
-  // Focus timer tick
+  // Wall-clock countdown. Background tabs and reloads read the deadline, not a drifted tick.
   useEffect(() => {
-    if (!ready || !state.focus.running) return;
-    const id = window.setInterval(() => {
-      const f = stateRef.current.focus;
-      if (!f.running || !f.endsAt) return;
-      const remaining = Math.max(0, Math.ceil((f.endsAt - Date.now()) / 1000));
-      let next: FocusState = { ...f, remainingSec: remaining };
-      if (!f.twoMinNotified && remaining <= 120 && remaining > 0 && f.totalSec > 150) {
-        next.twoMinNotified = true;
-        if (stateRef.current.prefs.focusReminders) {
+    if (!ready) return;
+    const sync = () => {
+      const s = stateRef.current;
+      const f = s.focus;
+
+      if (f.linkedToBlock && f.eventId && f.running) {
+        const ev = s.events.find((e) => e.id === f.eventId);
+        if (!ev) {
+          setState((prev) => ({
+            ...prev,
+            focus: { ...prev.focus, running: false, linkedToBlock: false, endPromptFor: null },
+          }));
+          return;
+        }
+        const end = eventEndMs(ev);
+        const remaining = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+        if (remaining <= 0) {
+          if (ringing.current === end || f.alarmedAt === end) {
+            if (f.running || f.endPromptFor !== end) {
+              setState((prev) => ({
+                ...prev,
+                focus: {
+                  ...prev.focus,
+                  remainingSec: 0,
+                  running: false,
+                  endsAt: end,
+                  finished: false,
+                  alarmedAt: end,
+                  endPromptFor: end,
+                },
+              }));
+            }
+            return;
+          }
+          ringing.current = end;
+          playBlockChime(String(end));
+          setState((prev) => ({
+            ...prev,
+            focus: {
+              ...prev.focus,
+              remainingSec: 0,
+              running: false,
+              endsAt: end,
+              finished: false,
+              alarmedAt: end,
+              endPromptFor: end,
+            },
+          }));
+          return;
+        }
+        if (
+          remaining <= 120 &&
+          ev.duration * 60 > 150 &&
+          warnedDeadline.current !== end &&
+          s.prefs.focusReminders
+        ) {
+          warnedDeadline.current = end;
           notify("Two minutes left. Start landing the plane — gently.", { title: "Soft transition" });
         }
+        if (remaining !== f.remainingSec || f.endsAt !== end) {
+          setState((prev) => ({
+            ...prev,
+            focus: {
+              ...prev.focus,
+              remainingSec: remaining,
+              endsAt: end,
+              twoMinNotified: remaining <= 120,
+            },
+          }));
+        }
+        return;
       }
-      if (remaining === 0) {
-        next = { ...next, running: false, endsAt: null, finished: true };
-        notify("Session complete. Check in when you're ready — no score.", { title: "You amplified" });
+
+      if (f.running && f.endsAt && !f.linkedToBlock) {
+        const remaining = Math.max(0, Math.ceil((f.endsAt - Date.now()) / 1000));
+        let next: FocusState = { ...f, remainingSec: remaining };
+        if (!f.twoMinNotified && remaining <= 120 && remaining > 0 && f.totalSec > 150 && warnedDeadline.current !== f.endsAt) {
+          warnedDeadline.current = f.endsAt;
+          next.twoMinNotified = true;
+          if (s.prefs.focusReminders) {
+            notify("Two minutes left. Start landing the plane — gently.", { title: "Soft transition" });
+          }
+        }
+        if (remaining === 0) {
+          next = { ...next, running: false, endsAt: null, finished: true };
+          if (unlinkedDone.current !== f.endsAt) {
+            unlinkedDone.current = f.endsAt;
+            notify("Session complete. Check in when you're ready — no score.", { title: "You amplified" });
+          }
+        }
+        if (remaining !== f.remainingSec || next.finished || next.twoMinNotified !== f.twoMinNotified) {
+          setState((prev) => ({ ...prev, focus: next.finished || next.twoMinNotified ? next : { ...prev.focus, remainingSec: remaining } }));
+        }
       }
-      setState((s) => ({ ...s, focus: next }));
-    }, 500);
-    return () => window.clearInterval(id);
-  }, [ready, state.focus.running]);
+    };
+    sync();
+    const id = window.setInterval(sync, 500);
+    document.addEventListener("visibilitychange", sync);
+    window.addEventListener("focus", sync);
+    window.addEventListener("pageshow", sync);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", sync);
+      window.removeEventListener("focus", sync);
+      window.removeEventListener("pageshow", sync);
+    };
+  }, [ready]);
 
   // Layered nudges
   useEffect(() => {
@@ -218,6 +333,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
           done: false,
           nudges: e.nudges ?? { day: false, hour: true, ten: true, now: true },
           ...e,
+          schedule: e.schedule === "fixed" ? "fixed" : "flexible",
         };
         update((s) => ({ ...s, events: [...s.events, full] }));
         return full;
@@ -287,7 +403,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
       removeLink: (id) => update((s) => ({ ...s, links: s.links.filter((l) => l.id !== id) })),
       selectPreset: (id) =>
         updateFocus((f) => {
-          if (f.running) return f;
+          if (f.running || f.linkedToBlock) return f;
           const p = FOCUS_PRESETS.find((x) => x.id === id);
           const minutes = id === "custom" ? f.customMin : (p?.minutes ?? 25);
           return {
@@ -295,6 +411,9 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
             presetId: id,
             label: p?.label ?? f.label,
             eventId: null,
+            linkedToBlock: false,
+            endPromptFor: null,
+            alarmedAt: null,
             totalSec: minutes * 60,
             remainingSec: minutes * 60,
             finished: false,
@@ -309,45 +428,316 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
           return { ...f, customMin, totalSec: customMin * 60, remainingSec: customMin * 60 };
         }),
       startFocus: (opts) =>
-        updateFocus((f) => {
+        setState((s) => {
+          const f = s.focus;
+          if (!opts && f.linkedToBlock && f.eventId) {
+            const ev = s.events.find((e) => e.id === f.eventId);
+            if (ev && scheduleOf(ev) === "flexible") {
+              const plan = planBlockTimer(ev, new Date());
+              if (plan.ended) {
+                return {
+                  ...s,
+                  focus: {
+                    ...f,
+                    running: false,
+                    remainingSec: 0,
+                    endsAt: plan.endsAt,
+                    finished: false,
+                    alarmedAt: plan.endsAt,
+                    endPromptFor: plan.endsAt,
+                  },
+                };
+              }
+              return {
+                ...s,
+                focus: {
+                  ...f,
+                  running: true,
+                  endsAt: plan.endsAt,
+                  remainingSec: plan.remainingSec,
+                  totalSec: Math.max(f.totalSec, plan.remainingSec),
+                  finished: false,
+                  endPromptFor: null,
+                  twoMinNotified: plan.remainingSec <= 120,
+                },
+              };
+            }
+          }
           const minutes = opts?.minutes;
           const totalSec = minutes ? minutes * 60 : f.totalSec;
           const remaining = minutes ? minutes * 60 : f.finished || f.remainingSec <= 0 ? f.totalSec : f.remainingSec;
+          const replacingLink = opts?.eventId !== undefined;
           return {
-            ...f,
-            presetId: opts?.presetId ?? f.presetId,
-            label: opts?.label ?? f.label,
-            eventId: opts?.eventId !== undefined ? opts.eventId : f.eventId,
-            totalSec,
-            remainingSec: remaining,
-            running: true,
-            endsAt: Date.now() + remaining * 1000,
-            finished: false,
-            twoMinNotified: minutes ? false : f.twoMinNotified,
+            ...s,
+            focus: {
+              ...f,
+              presetId: opts?.presetId ?? f.presetId,
+              label: opts?.label ?? f.label,
+              eventId: opts?.eventId !== undefined ? opts.eventId : f.eventId,
+              linkedToBlock: replacingLink ? !!opts?.linkedToBlock : f.linkedToBlock,
+              totalSec,
+              remainingSec: remaining,
+              running: true,
+              endsAt: Date.now() + remaining * 1000,
+              finished: false,
+              endPromptFor: null,
+              twoMinNotified: minutes ? false : f.twoMinNotified,
+              alarmedAt: minutes ? null : f.alarmedAt,
+            },
           };
         }),
       pauseFocus: () =>
-        updateFocus((f) => ({
-          ...f,
-          running: false,
-          endsAt: null,
-          remainingSec: f.endsAt ? Math.max(0, Math.ceil((f.endsAt - Date.now()) / 1000)) : f.remainingSec,
-        })),
+        setState((s) => {
+          const f = s.focus;
+          let remaining = f.remainingSec;
+          if (f.linkedToBlock && f.eventId) {
+            const ev = s.events.find((e) => e.id === f.eventId);
+            if (ev) remaining = planBlockTimer(ev, new Date()).remainingSec;
+          } else if (f.endsAt) {
+            remaining = Math.max(0, Math.ceil((f.endsAt - Date.now()) / 1000));
+          }
+          return { ...s, focus: { ...f, running: false, endsAt: null, remainingSec: remaining } };
+        }),
       resumeFocus: () =>
-        updateFocus((f) => ({ ...f, running: true, endsAt: Date.now() + f.remainingSec * 1000 })),
+        setState((s) => {
+          const f = s.focus;
+          if (f.linkedToBlock && f.eventId) {
+            const ev = s.events.find((e) => e.id === f.eventId);
+            if (ev) {
+              const plan = planBlockTimer(ev, new Date());
+              if (plan.ended) {
+                if (f.alarmedAt !== plan.endsAt) playBlockChime(String(plan.endsAt));
+                return {
+                  ...s,
+                  focus: {
+                    ...f,
+                    running: false,
+                    remainingSec: 0,
+                    endsAt: plan.endsAt,
+                    finished: false,
+                    alarmedAt: plan.endsAt,
+                    endPromptFor: plan.endsAt,
+                  },
+                };
+              }
+              return {
+                ...s,
+                focus: {
+                  ...f,
+                  running: true,
+                  endsAt: plan.endsAt,
+                  remainingSec: plan.remainingSec,
+                  totalSec: Math.max(f.totalSec, plan.remainingSec),
+                  finished: false,
+                  endPromptFor: null,
+                },
+              };
+            }
+          }
+          return { ...s, focus: { ...f, running: true, endsAt: Date.now() + f.remainingSec * 1000, finished: false } };
+        }),
       resetFocus: () =>
-        updateFocus((f) => ({
-          ...f,
+        setState((s) => {
+          const f = s.focus;
+          if (f.linkedToBlock && f.eventId) {
+            const ev = s.events.find((e) => e.id === f.eventId);
+            if (ev) {
+              const plan = planBlockTimer(ev, new Date());
+              return {
+                ...s,
+                focus: {
+                  ...f,
+                  running: false,
+                  endsAt: null,
+                  remainingSec: plan.remainingSec,
+                  totalSec: Math.max(plan.remainingSec, 1),
+                  finished: false,
+                  endPromptFor: null,
+                  twoMinNotified: false,
+                },
+              };
+            }
+          }
+          return {
+            ...s,
+            focus: {
+              ...f,
+              running: false,
+              endsAt: null,
+              remainingSec: f.totalSec,
+              finished: false,
+              twoMinNotified: false,
+              endPromptFor: null,
+            },
+          };
+        }),
+      extendFocus: (min) => updateFocus((f) => (f.linkedToBlock ? f : extendFocusState(f, min))),
+      startLinkedTimer: (eventId) => {
+        const s = stateRef.current;
+        const ev = s.events.find((e) => e.id === eventId);
+        if (!ev) return { ok: false, message: "That activity is no longer on your day." };
+        if (scheduleOf(ev) !== "flexible") {
+          return { ok: false, message: "Fixed events stay put. Start a separate focus if you want a timer." };
+        }
+        const plan = planBlockTimer(ev, new Date());
+        setState((prev) => ({
+          ...prev,
+          focus: {
+            ...prev.focus,
+            presetId: "event",
+            label: ev.title,
+            eventId: ev.id,
+            linkedToBlock: true,
+            totalSec: plan.ended ? Math.max(ev.duration * 60, 1) : Math.max(plan.remainingSec, 1),
+            remainingSec: plan.remainingSec,
+            running: !plan.ended,
+            endsAt: plan.ended ? plan.endsAt : plan.endsAt,
+            finished: false,
+            twoMinNotified: plan.remainingSec <= 120,
+            alarmedAt: plan.ended ? plan.endsAt : null,
+            endPromptFor: plan.ended ? plan.endsAt : null,
+          },
+        }));
+        return { ok: true, ended: plan.ended };
+      },
+      extendLinked: (minutes, force = false) => {
+        const s = stateRef.current;
+        const id = s.focus.eventId;
+        if (!id || !s.focus.linkedToBlock) return { ok: false, message: "Start the activity timer first." };
+        const ev = s.events.find((e) => e.id === id);
+        if (!ev) return { ok: false, message: "That activity is no longer on your day." };
+        if (scheduleOf(ev) !== "flexible") {
+          return { ok: false, message: "Fixed events stay put. Reschedule to move one." };
+        }
+        const planned = planExtension(ev, minutes, new Date());
+        if (!planned.ok) return planned;
+        const hit = fixedConflict(s.events, ev.id, eventStartMs(ev), planned.plan.endMs, Date.now());
+        if (hit && !force) return { ok: false, reason: "conflict", message: conflictMessage(hit), minutes };
+        const endMs = planned.plan.endMs;
+        const remaining = Math.max(1, Math.ceil((endMs - Date.now()) / 1000));
+        warnedDeadline.current = null;
+        setState((prev) => ({
+          ...prev,
+          events: prev.events.map((e) => (e.id === id ? { ...e, duration: planned.plan.duration } : e)),
+          focus: {
+            ...prev.focus,
+            label: ev.title,
+            eventId: id,
+            linkedToBlock: true,
+            running: true,
+            endsAt: endMs,
+            remainingSec: remaining,
+            totalSec: remaining,
+            finished: false,
+            endPromptFor: null,
+            twoMinNotified: remaining <= 120,
+          },
+        }));
+        return { ok: true };
+      },
+      finishLinked: () => {
+        const f = stateRef.current.focus;
+        if (f.eventId) {
+          const ev = stateRef.current.events.find((e) => e.id === f.eventId);
+          if (ev && !ev.done) addWin(ev.title);
+          updateEvent(f.eventId, (e) => ({
+            ...e,
+            done: true,
+            steps: e.steps?.map((st) => ({ ...st, done: true })),
+          }));
+        }
+        updateFocus((x) => ({
+          ...x,
           running: false,
           endsAt: null,
-          remainingSec: f.totalSec,
           finished: false,
-          twoMinNotified: false,
+          endPromptFor: null,
+          linkedToBlock: false,
+          remainingSec: 0,
+        }));
+      },
+      dismissEndPrompt: () =>
+        setState((s) => {
+          const f = s.focus;
+          let remaining = f.remainingSec;
+          if (f.linkedToBlock && f.eventId) {
+            const ev = s.events.find((e) => e.id === f.eventId);
+            if (ev) remaining = planBlockTimer(ev, new Date()).remainingSec;
+          }
+          return { ...s, focus: { ...f, endPromptFor: null, running: false, remainingSec: remaining } };
+        }),
+      endLinked: () =>
+        setState((s) => {
+          const f = s.focus;
+          const ev = f.eventId ? s.events.find((e) => e.id === f.eventId) : undefined;
+          if (!ev) return { ...s, focus: { ...f, running: false, endPromptFor: f.endsAt } };
+          const plan = planBlockTimer(ev, new Date());
+          return {
+            ...s,
+            focus: {
+              ...f,
+              running: false,
+              endsAt: null,
+              remainingSec: plan.remainingSec,
+              finished: false,
+              endPromptFor: plan.endsAt,
+              alarmedAt: plan.ended ? plan.endsAt : f.alarmedAt,
+            },
+          };
+        }),
+      releaseLinked: () =>
+        setState((s) => ({
+          ...s,
+          focus: defaultFocus({
+            bodyDouble: s.focus.bodyDouble,
+            customMin: s.focus.customMin,
+            presetId: "study",
+            label: "Study",
+            totalSec: 25 * 60,
+            remainingSec: 25 * 60,
+          }),
         })),
-      extendFocus: (min) => updateFocus((f) => extendFocusState(f, min)),
+      commitSchedule: (id, raw) => {
+        const input = { ...raw, time: normalizeTime(raw.time) };
+        const check = validateSlot(input);
+        if (!check.ok) return check;
+        const ev = stateRef.current.events.find((e) => e.id === id);
+        if (!ev) return { ok: false, message: "That activity is no longer on your day." };
+        const next = applyReschedule(ev, input);
+        const moved = slotChanged(ev, input);
+        setState((prev) => {
+          let focus = prev.focus;
+          if (focus.eventId === id && focus.linkedToBlock) {
+            if (next.schedule === "fixed") {
+              focus = { ...focus, linkedToBlock: false, endPromptFor: null, running: false, endsAt: null };
+            } else {
+              const plan = planBlockTimer(next, new Date());
+              focus = {
+                ...focus,
+                label: next.title,
+                endsAt: plan.endsAt,
+                remainingSec: plan.remainingSec,
+                running: focus.running && !plan.ended,
+                finished: false,
+                endPromptFor: plan.ended ? plan.endsAt : null,
+                alarmedAt: plan.ended ? plan.endsAt : focus.alarmedAt,
+                totalSec: Math.max(focus.totalSec, plan.remainingSec, 1),
+              };
+            }
+          }
+          return {
+            ...prev,
+            events: prev.events.map((e) => (e.id === id ? next : e)),
+            firedNudges: moved ? clearFiredFor(prev.firedNudges, id) : prev.firedNudges,
+            focus,
+          };
+        });
+        return { ok: true };
+      },
       setBodyDouble: (on) => updateFocus((f) => ({ ...f, bodyDouble: on })),
       checkIn: (choice) => {
         const f = stateRef.current.focus;
+        if (f.linkedToBlock) return;
         if (choice === "more") {
           updateFocus((x) => extendFocusState(x, 5));
           return;
@@ -356,7 +746,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
         if (f.eventId) {
           updateEvent(f.eventId, (e) => ({ ...e, done: true }));
         }
-        updateFocus((x) => ({ ...x, finished: false, remainingSec: x.totalSec, twoMinNotified: false }));
+        updateFocus((x) => ({ ...x, finished: false, remainingSec: x.totalSec, twoMinNotified: false, running: false }));
       },
       resetAll: () => {
         setState(createSeed());

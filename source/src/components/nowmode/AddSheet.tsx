@@ -4,7 +4,10 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { addDays, formatTime, nextHalfHour, parseCapture, toDateKey } from "@/lib/nowmode/logic";
+import { parseMinutesInput, validateSlot } from "@/lib/nowmode/schedule";
 import { useNowMode } from "@/lib/nowmode/store";
+import type { ScheduleType } from "@/lib/nowmode/types";
+import { ScheduleTypeField } from "./ScheduleTypeField";
 import { useUI, type SheetTab } from "./ui-context";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -127,6 +130,9 @@ function TextCapture() {
   const { addEvent, addCard } = useNowMode();
   const { sheetMode, closeSheet } = useUI();
   const [text, setText] = useState("");
+  const [schedule, setSchedule] = useState<ScheduleType>("flexible");
+  const [minutes, setMinutes] = useState("25");
+  const [error, setError] = useState<string | null>(null);
   const parsed = useMemo(() => parseCapture(text), [text]);
   const boardOnly = sheetMode === "board";
 
@@ -135,22 +141,35 @@ function TextCapture() {
     if (boardOnly) {
       addCard({ kind: "text", text: text.trim() });
       toast("Pinned to Board");
-    } else {
-      const now = new Date();
-      const time = parsed.time ?? nextHalfHour(now);
-      addEvent({
-        title: parsed.title,
-        date: toDateKey(addDays(now, parsed.dayOffset)),
-        time,
-        duration: 20,
-        tag: "Capture",
-        color: "blue",
-      });
-      addCard({ kind: "text", text: text.trim() });
-      toast("Captured", {
-        description: `${parsed.dayOffset ? "Tomorrow" : "Today"} at ${formatTime(time)} · also pinned to Board`,
-      });
+      closeSheet();
+      return;
     }
+    const length = parseMinutesInput(minutes);
+    if (!length.ok) {
+      setError(length.message);
+      return;
+    }
+    const now = new Date();
+    const time = parsed.time ?? nextHalfHour(now);
+    const date = toDateKey(addDays(now, parsed.dayOffset));
+    const slot = validateSlot({ date, time, duration: length.minutes });
+    if (!slot.ok) {
+      setError(slot.message);
+      return;
+    }
+    addEvent({
+      title: parsed.title,
+      date,
+      time,
+      duration: length.minutes,
+      tag: "Capture",
+      color: "blue",
+      schedule,
+    });
+    addCard({ kind: "text", text: text.trim() });
+    toast("Captured", {
+      description: `${parsed.dayOffset ? "Tomorrow" : "Today"} at ${formatTime(time)} · ${schedule} · also pinned to Board`,
+    });
     closeSheet();
   };
 
@@ -175,6 +194,28 @@ function TextCapture() {
           → <span className="font-semibold text-foreground">{parsed.title}</span> ·{" "}
           {parsed.dayOffset ? "Tomorrow" : "Today"} ·{" "}
           <span className="text-blue">{parsed.time ? formatTime(parsed.time) : "next free half-hour"}</span>
+        </p>
+      )}
+      {!boardOnly && (
+        <>
+          <ScheduleTypeField value={schedule} onChange={setSchedule} name="capture-schedule" />
+          <label className="block text-xs font-semibold">
+            Length in minutes
+            <input
+              inputMode="numeric"
+              value={minutes}
+              onChange={(e) => {
+                setMinutes(e.target.value);
+                setError(null);
+              }}
+              className="mt-1 h-11 w-full rounded-xl border border-border2 bg-card px-3 text-sm font-medium focus:border-blue focus:outline-none"
+            />
+          </label>
+        </>
+      )}
+      {error && (
+        <p role="alert" className="text-xs text-coral">
+          {error}
         </p>
       )}
       <Button type="submit" size="lg" className="h-12 w-full rounded-xl text-[15px] font-semibold" disabled={!text.trim()}>
