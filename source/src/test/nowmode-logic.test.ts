@@ -13,6 +13,7 @@ const base: NowEvent = {
   color: "blue",
   done: false,
   nudges: { day: false, hour: true, ten: true, now: true },
+  schedule: "fixed",
 };
 
 describe("parseTime", () => {

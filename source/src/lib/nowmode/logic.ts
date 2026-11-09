@@ -41,7 +41,11 @@ export function addMinutes(hhmm: string, mins: number): string {
 
 export function formatMMSS(sec: number): string {
   const s = Math.max(0, Math.round(sec));
-  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+  return `${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
 }
 
 const TIME_RE =

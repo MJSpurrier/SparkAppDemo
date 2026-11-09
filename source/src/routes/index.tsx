@@ -7,12 +7,13 @@ import { barColor } from "@/components/nowmode/colors";
 import { Loading } from "@/components/nowmode/Loading";
 import { Ring } from "@/components/nowmode/Ring";
 import { ScreenHeader } from "@/components/nowmode/ScreenHeader";
+import { TypeBadge } from "@/components/nowmode/ScheduleTypeField";
 import { useUI } from "@/components/nowmode/ui-context";
 import { Button } from "@/components/ui/button";
+import { unlockAlarm } from "@/lib/nowmode/alarm";
 import {
   ENERGY_COPY,
   NUDGE_TIERS,
-  addMinutes,
   eventsOn,
   formatClock,
   formatMMSS,
@@ -20,8 +21,9 @@ import {
   nextUp,
   toDateKey,
 } from "@/lib/nowmode/logic";
+import { eventEndClock, focusSwitchGate, formatRange, planBlockTimer, scheduleOf } from "@/lib/nowmode/schedule";
 import { useNow, useNowMode } from "@/lib/nowmode/store";
-import type { Energy, NowEvent } from "@/lib/nowmode/types";
+import type { Energy, FocusState, NowEvent } from "@/lib/nowmode/types";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -143,29 +145,92 @@ function Today() {
 }
 
 function EventRow({ ev }: { ev: NowEvent }) {
-  const { toggleDone } = useNowMode();
+  const { state, toggleDone } = useNowMode();
+  const { openSchedule } = useUI();
+  const openTimer = useActivityTimer();
+  const flexible = scheduleOf(ev) === "flexible";
+  const timerOpen = state.focus.linkedToBlock && state.focus.eventId === ev.id && (state.focus.running || !!state.focus.endPromptFor);
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-border bg-card px-3 py-3">
-      <span className={cn("h-8 w-1 shrink-0 rounded-full", barColor[ev.color], ev.done && "opacity-40")} />
-      <div className="min-w-0 flex-1">
-        <p className={cn("truncate text-sm font-semibold", ev.done && "text-dim line-through")}>{ev.title}</p>
-        <p className="text-xs text-dim">
-          {formatTime(ev.time, false)} · {ev.duration <= 5 ? "tiny win" : `${ev.duration} min`}
-        </p>
+    <div className="rounded-2xl border border-border bg-card px-3 py-3">
+      <div className="flex items-center gap-3">
+        <span className={cn("h-8 w-1 shrink-0 rounded-full", barColor[ev.color], ev.done && "opacity-40")} />
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-2">
+            <span className={cn("truncate text-sm font-semibold", ev.done && "text-dim line-through")}>{ev.title}</span>
+            <TypeBadge schedule={ev.schedule} />
+          </p>
+          <p className="text-xs text-dim">
+            {formatTime(ev.time, false)} · {ev.duration <= 5 ? "tiny win" : `${ev.duration} min`}
+          </p>
+        </div>
+        <button
+          type="button"
+          aria-label={ev.done ? `Mark ${ev.title} not done` : `Mark ${ev.title} done`}
+          onClick={() => toggleDone(ev.id)}
+          className={cn(
+            "grid size-8 shrink-0 place-items-center rounded-full border transition-colors",
+            ev.done ? "border-green/50 bg-green/15 text-green" : "border-border2 text-dim hover:text-foreground",
+          )}
+        >
+          <Check className="size-4" />
+        </button>
       </div>
-      <button
-        type="button"
-        aria-label={ev.done ? `Mark ${ev.title} not done` : `Mark ${ev.title} done`}
-        onClick={() => toggleDone(ev.id)}
-        className={cn(
-          "grid size-8 shrink-0 place-items-center rounded-full border transition-colors",
-          ev.done ? "border-green/50 bg-green/15 text-green" : "border-border2 text-dim hover:text-foreground",
+      <div className="mt-2 flex gap-2 pl-4">
+        {flexible && !ev.done && (
+          <RowAction onClick={() => openTimer(ev)}>
+            {timerOpen ? "Open timer" : planBlockTimer(ev, new Date()).ended ? "Add time" : "Timer"}
+          </RowAction>
         )}
-      >
-        <Check className="size-4" />
-      </button>
+        {flexible && <RowAction onClick={() => openSchedule(ev.id)}>Edit time</RowAction>}
+        {!flexible && <RowAction onClick={() => openSchedule(ev.id)}>Reschedule</RowAction>}
+      </div>
     </div>
   );
+}
+
+function RowAction({ children, onClick }: { children: ReactNode; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-lg border border-border2 bg-background/40 px-2.5 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+    >
+      {children}
+    </button>
+  );
+}
+
+function focusBusy(f: FocusState) {
+  return f.running || (!f.finished && !f.endPromptFor && f.remainingSec > 0 && f.remainingSec < f.totalSec);
+}
+
+function useActivityTimer() {
+  const { state, startLinkedTimer, resumeFocus } = useNowMode();
+  const { askTimer } = useUI();
+  const navigate = useNavigate();
+  return (ev: NowEvent) => {
+    unlockAlarm();
+    const f = state.focus;
+    const gate = focusSwitchGate(f, ev.id);
+    if (gate === "confirm") {
+      askTimer({ kind: "block", eventId: ev.id });
+      return;
+    }
+    if (f.endPromptFor && f.eventId === ev.id) {
+      navigate({ to: "/focus" });
+      return;
+    }
+    if (gate === "same" && f.running) {
+      navigate({ to: "/focus" });
+      return;
+    }
+    if (gate === "same" && f.linkedToBlock && !f.running && f.remainingSec > 0 && f.remainingSec < f.totalSec) {
+      resumeFocus();
+    } else {
+      startLinkedTimer(ev.id);
+    }
+    navigate({ to: "/focus" });
+  };
 }
 
 function AllClearCard() {
@@ -186,7 +251,9 @@ function AllClearCard() {
 
 function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
   const { state, startFocus, toggleDone, splitTask, toggleStep, toggleNudge, previewNudges } = useNowMode();
+  const { openSchedule, askTimer } = useUI();
   const navigate = useNavigate();
+  const openTimer = useActivityTimer();
   const [showNudges, setShowNudges] = useState(false);
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">("unsupported");
   useEffect(() => {
@@ -194,39 +261,78 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
   }, []);
 
   const f = state.focus;
-  const focusActive = f.eventId === ev.id && (f.running || (f.remainingSec < f.totalSec && !f.finished));
+  const flexible = scheduleOf(ev) === "flexible";
+  const linked = flexible && f.linkedToBlock && f.eventId === ev.id;
+  const personalActive = !flexible && f.eventId === ev.id && !f.linkedToBlock && (f.running || (f.remainingSec < f.totalSec && !f.finished));
+  const block = planBlockTimer(ev, now);
   const energyCopy = state.energy ? ENERGY_COPY[state.energy] : "One thing, then the next.";
 
-  const go = (minutes: number) => {
-    startFocus({ minutes, eventId: ev.id, label: ev.title, presetId: "event" });
+  const goSprint = (minutes: number) => {
+    unlockAlarm();
+    if (focusBusy(f) && (f.eventId !== ev.id || f.linkedToBlock)) {
+      askTimer({ kind: "free", eventId: ev.id, minutes });
+      return;
+    }
+    startFocus({ minutes, eventId: ev.id, label: ev.title, presetId: "event", linkedToBlock: false });
     navigate({ to: "/focus" });
   };
 
+  const goPersonal = () => {
+    unlockAlarm();
+    if (personalActive) {
+      navigate({ to: "/focus" });
+      return;
+    }
+    if (focusBusy(f) && f.eventId !== ev.id) {
+      askTimer({ kind: "free", eventId: ev.id, minutes: ev.duration });
+      return;
+    }
+    startFocus({ minutes: ev.duration, eventId: ev.id, label: ev.title, presetId: "event", linkedToBlock: false });
+    navigate({ to: "/focus" });
+  };
+
+  const showCountdown = flexible && (linked && (f.running || f.remainingSec < f.totalSec || !!f.endPromptFor) || block.ended);
+  const shownRemaining = linked ? f.remainingSec : 0;
+  const ringValue = showCountdown
+    ? linked && f.totalSec
+      ? f.remainingSec / f.totalSec
+      : 0
+    : personalActive && f.totalSec
+      ? f.remainingSec / f.totalSec
+      : 1;
+
   return (
     <section aria-label="Up next" className="rounded-[20px] border border-border2 bg-hero p-5 shadow-card">
-      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-blue">Up next</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-blue">Up next</p>
+        <TypeBadge schedule={ev.schedule} />
+      </div>
       <h2 className="mt-1 text-[22px] font-bold leading-tight">{ev.title}</h2>
       <p className="mt-0.5 text-sm text-muted-foreground">
-        {ev.tag} · {formatTime(ev.time)} – ends ~{formatTime(addMinutes(ev.time, ev.duration))}
+        {ev.tag} · {formatRange(ev)}
       </p>
 
       <div className="mt-4 flex items-center gap-4">
         <Ring
           size={72}
           stroke={9}
-          value={focusActive ? f.remainingSec / f.totalSec : 1}
-          label={focusActive ? "Focus time remaining" : "Block length"}
+          value={ringValue}
+          label={flexible ? "Time left in this block" : "Block length"}
         >
           <span className="text-sm font-bold">
-            {focusActive ? `${Math.ceil(f.remainingSec / 60)}m` : `${ev.duration}m`}
+            {showCountdown ? `${Math.max(0, Math.ceil(shownRemaining / 60))}m` : `${ev.duration}m`}
           </span>
         </Ring>
         <div className="min-w-0">
           <p className="text-[32px] font-bold tabular-nums leading-none tracking-tight">
-            {focusActive ? formatMMSS(f.remainingSec) : formatTime(ev.time, false)}
+            {showCountdown ? formatMMSS(shownRemaining) : formatTime(ev.time, false)}
           </p>
           <p className="mt-1.5 text-xs text-muted-foreground">
-            of {ev.duration}-min · clock {formatClock(now)}
+            {flexible
+              ? block.ended
+                ? `Ended ${formatTime(eventEndClock(ev), false)} · clock ${formatClock(now)}`
+                : `until ${formatTime(eventEndClock(ev), false)} · clock ${formatClock(now)}`
+              : `of ${ev.duration}-min · clock ${formatClock(now)}`}
           </p>
         </div>
       </div>
@@ -234,9 +340,15 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
       <p className="mt-4 text-sm text-foreground/85">{energyCopy}</p>
 
       <div className="mt-4 grid grid-cols-2 gap-3">
-        <Button size="lg" className="h-11 rounded-xl text-[15px] font-semibold" onClick={() => (focusActive ? navigate({ to: "/focus" }) : go(ev.duration))}>
-          {focusActive ? "Back to focus" : "Start focus"}
-        </Button>
+        {flexible ? (
+          <Button size="lg" className="h-11 rounded-xl text-[15px] font-semibold" onClick={() => openTimer(ev)}>
+            {linked && (f.running || f.endPromptFor) ? "Open timer" : block.ended ? "Add time" : "Start timer"}
+          </Button>
+        ) : (
+          <Button size="lg" className="h-11 rounded-xl text-[15px] font-semibold" onClick={goPersonal}>
+            {personalActive ? "Back to focus" : "Start focus"}
+          </Button>
+        )}
         <Button
           variant="secondary"
           size="lg"
@@ -249,8 +361,22 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
           <Scissors /> Split task
         </Button>
       </div>
+      {!flexible && (
+        <Button variant="secondary" className="mt-2 h-10 w-full rounded-xl" onClick={() => openSchedule(ev.id)}>
+          Reschedule
+        </Button>
+      )}
+      {flexible && (
+        <button
+          type="button"
+          onClick={() => openSchedule(ev.id)}
+          className="mt-2 text-xs font-semibold text-muted-foreground underline-offset-2 hover:underline"
+        >
+          Edit time
+        </button>
+      )}
       <div className="mt-2 grid grid-cols-3 gap-2">
-        <GhostBtn onClick={() => go(2)} icon={<Clock3 className="size-3.5" />}>
+        <GhostBtn onClick={() => goSprint(2)} icon={<Clock3 className="size-3.5" />}>
           Just 2 min
         </GhostBtn>
         <GhostBtn onClick={() => toggleDone(ev.id)} icon={<Check className="size-3.5" />}>

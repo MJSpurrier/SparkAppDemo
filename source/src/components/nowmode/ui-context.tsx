@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from "re
 
 export type SheetMode = "all" | "board";
 export type SheetTab = "menu" | "text" | "voice" | "photo";
+export type TimerRequest = { kind: "block" | "free"; eventId: string; minutes?: number } | null;
 
 interface UIState {
   drawerOpen: boolean;
@@ -12,6 +13,12 @@ interface UIState {
   setSheetTab: (t: SheetTab) => void;
   openSheet: (mode?: SheetMode, tab?: SheetTab) => void;
   closeSheet: () => void;
+  scheduleEventId: string | null;
+  openSchedule: (id: string) => void;
+  closeSchedule: () => void;
+  timerRequest: TimerRequest;
+  askTimer: (req: Exclude<TimerRequest, null>) => void;
+  closeTimerRequest: () => void;
 }
 
 const UICtx = createContext<UIState | null>(null);
@@ -21,6 +28,8 @@ export function UIProvider({ children }: { children: ReactNode }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetMode, setSheetMode] = useState<SheetMode>("all");
   const [sheetTab, setSheetTab] = useState<SheetTab>("menu");
+  const [scheduleEventId, setScheduleEventId] = useState<string | null>(null);
+  const [timerRequest, setTimerRequest] = useState<TimerRequest>(null);
 
   const value = useMemo<UIState>(
     () => ({
@@ -36,8 +45,14 @@ export function UIProvider({ children }: { children: ReactNode }) {
         setSheetOpen(true);
       },
       closeSheet: () => setSheetOpen(false),
+      scheduleEventId,
+      openSchedule: (id: string) => setScheduleEventId(id),
+      closeSchedule: () => setScheduleEventId(null),
+      timerRequest,
+      askTimer: (req) => setTimerRequest(req),
+      closeTimerRequest: () => setTimerRequest(null),
     }),
-    [drawerOpen, sheetOpen, sheetMode, sheetTab],
+    [drawerOpen, sheetOpen, sheetMode, sheetTab, scheduleEventId, timerRequest],
   );
 
   return <UICtx.Provider value={value}>{children}</UICtx.Provider>;

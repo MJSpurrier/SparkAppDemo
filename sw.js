@@ -1,8 +1,8 @@
 /* Now Mode service worker.
-   Versioned cache: activate deletes Spark v5 (spark-v5-feedback-1) and any other cache.
-   The app shell is network-first so a returning tester gets this build, not a stale page.
+   nowmode-v2 drops nowmode-v1 and Spark v5 so this build installs cleanly.
+   The app shell is network-first so a returning tester gets this version.
 */
-const CACHE = "nowmode-v1";
+const CACHE = "nowmode-v2";
 const SHELL = [
   "/SparkAppDemo/",
   "/SparkAppDemo/index.html",

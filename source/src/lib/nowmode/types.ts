@@ -1,6 +1,8 @@
 export type EventColor = "blue" | "teal" | "green" | "coral";
 export type Energy = "low" | "okay" | "high";
 export type CardKind = "text" | "voice" | "photo";
+/** Flexible blocks can run long with the timer. Fixed stays put unless you reschedule it. */
+export type ScheduleType = "flexible" | "fixed";
 
 export interface Step {
   id: string;
@@ -29,6 +31,12 @@ export interface NowEvent {
   done: boolean;
   steps?: Step[];
   nudges: Nudges;
+  /**
+   * Flexible: a block the timer can extend (guitar 14:00–15:00).
+   * Fixed: an appointment that is never auto-moved.
+   * Missing on older saves is treated as fixed.
+   */
+  schedule: ScheduleType;
 }
 
 export interface BoardCard {
@@ -72,6 +80,12 @@ export interface FocusState {
   twoMinNotified: boolean;
   finished: boolean;
   customMin: number;
+  /** Wall-clock deadline already announced, so the same end doesn't chime twice. */
+  alarmedAt: number | null;
+  /** When true, the countdown deadline is the linked event's end, not a free-floating preset. */
+  linkedToBlock: boolean;
+  /** Event end (epoch ms) whose Finish / Extend prompt is open. */
+  endPromptFor: number | null;
 }
 
 export interface AppState {

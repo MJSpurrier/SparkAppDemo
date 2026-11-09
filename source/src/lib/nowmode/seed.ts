@@ -1,5 +1,5 @@
 import { addDays, toDateKey, uid } from "./logic";
-import type { AppState, EventColor, NowEvent } from "./types";
+import type { AppState, EventColor, NowEvent, ScheduleType } from "./types";
 
 const nudgesOn = { day: false, hour: true, ten: true, now: true };
 
@@ -10,6 +10,7 @@ function ev(
   tag: string,
   color: EventColor,
   duration: number,
+  schedule: ScheduleType,
   extra: Partial<NowEvent> = {},
 ): NowEvent {
   return {
@@ -22,6 +23,7 @@ function ev(
     color,
     done: false,
     nudges: { ...nudgesOn },
+    schedule,
     ...extra,
   };
 }
@@ -31,24 +33,24 @@ export function createSeed(now = new Date()): AppState {
   const d = (n: number) => addDays(today, n);
 
   const events: NowEvent[] = [
-    ev(today, "08:30", "Morning meds", "Health", "green", 5, { done: true }),
-    ev(today, "14:00", "Draft product brief", "Work", "blue", 25, {
+    ev(today, "08:30", "Morning meds", "Health", "green", 5, "fixed", { done: true }),
+    ev(today, "14:00", "Draft product brief", "Work", "blue", 25, "flexible", {
       steps: [
         { id: uid(), title: "Open the doc & paste last week's notes", done: false },
         { id: uid(), title: "Write the problem in 3 sentences", done: false },
         { id: uid(), title: "List 3 must-haves, then stop", done: false },
       ],
     }),
-    ev(today, "14:30", "Walk + voice dump", "Move", "teal", 20),
-    ev(today, "17:00", "Meds + water reset", "Health", "coral", 5),
-    ev(d(1), "10:00", "Dentist (bring card)", "Errand", "coral", 45),
-    ev(d(1), "16:00", "Reply to Sam's email", "Work", "blue", 15),
-    ev(d(2), "09:00", "Grocery run — list on board", "Home", "teal", 30),
-    ev(d(4), "19:00", "Game night at Jo's", "Joy", "green", 120),
-    ev(d(6), "11:00", "Sketch v2 onboarding", "Work", "blue", 25),
-    ev(d(6), "15:00", "Laundry: just wash", "Home", "teal", 10),
-    ev(d(-2), "13:00", "Therapy", "Health", "green", 50, { done: true }),
-    ev(d(-4), "10:30", "Kickoff call", "Work", "blue", 30, { done: true }),
+    ev(today, "14:30", "Walk + voice dump", "Move", "teal", 20, "flexible"),
+    ev(today, "17:00", "Meds + water reset", "Health", "coral", 5, "fixed"),
+    ev(d(1), "10:00", "Dentist (bring card)", "Errand", "coral", 45, "fixed"),
+    ev(d(1), "16:00", "Reply to Sam's email", "Work", "blue", 15, "flexible"),
+    ev(d(2), "09:00", "Grocery run — list on board", "Home", "teal", 30, "flexible"),
+    ev(d(4), "19:00", "Game night at Jo's", "Joy", "green", 120, "fixed"),
+    ev(d(6), "11:00", "Sketch v2 onboarding", "Work", "blue", 25, "flexible"),
+    ev(d(6), "15:00", "Laundry: just wash", "Home", "teal", 10, "flexible"),
+    ev(d(-2), "13:00", "Therapy", "Health", "green", 50, "fixed", { done: true }),
+    ev(d(-4), "10:30", "Kickoff call", "Work", "blue", 30, "fixed", { done: true }),
   ];
 
   const c1 = uid();
@@ -89,6 +91,9 @@ export function createSeed(now = new Date()): AppState {
       twoMinNotified: false,
       finished: false,
       customMin: 10,
+      alarmedAt: null,
+      linkedToBlock: false,
+      endPromptFor: null,
     },
     firedNudges: [],
   };
