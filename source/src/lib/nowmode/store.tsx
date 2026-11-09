@@ -1,11 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
+import { explainScheduleError, translate } from "@/lib/i18n/context";
+import { formatLocaleTime } from "@/lib/i18n/format";
+import { resolvedLocale } from "@/lib/i18n/context";
 import { playBlockChime } from "./alarm";
 import {
   NUDGE_TIERS,
   eventDate,
-  nudgeCopy,
   splitIntoSteps,
   toDateKey,
   toggleStep as toggleStepPure,
@@ -15,7 +17,6 @@ import {
 import {
   applyReschedule,
   clearFiredFor,
-  conflictMessage,
   defaultFocus,
   eventStartMs,
   eventEndMs,
@@ -30,6 +31,16 @@ import {
   type SlotInput,
 } from "./schedule";
 import { createSeed } from "./seed";
+import {
+  DEFAULT_NUDGES,
+  DEFAULT_QUIET_END,
+  DEFAULT_QUIET_START,
+  isQuietAt,
+  normalizeLead,
+  nudgeTierAllowed,
+  parseCustomDuration,
+  shouldLeadWarn,
+} from "./settings";
 import type { AppState, BoardCard, Energy, FocusState, NowEvent, Prefs, ScheduleType } from "./types";
 
 export const STORAGE_KEY = "nowmode-v1";
@@ -91,9 +102,22 @@ function extendFocusState(f: FocusState, min: number): FocusState {
   };
 }
 
-function inQuietHours(d: Date) {
-  const h = d.getHours();
-  return h >= 22 || h < 7;
+function localeOf(prefs: AppState["prefs"]) {
+  const browser = typeof navigator === "undefined" ? "en" : navigator.language;
+  return resolvedLocale(prefs.locale, browser);
+}
+
+function quietNow(prefs: AppState["prefs"], now = new Date()) {
+  if (!prefs.quietHours) return false;
+  return isQuietAt(now, prefs.quietStart ?? DEFAULT_QUIET_START, prefs.quietEnd ?? DEFAULT_QUIET_END);
+}
+
+function leadCopy(prefs: AppState["prefs"], minutes: number) {
+  const locale = localeOf(prefs);
+  return {
+    body: translate(locale, "lead.body", { n: minutes }),
+    title: translate(locale, "lead.title"),
+  };
 }
 
 interface StartFocusOpts {
@@ -111,6 +135,9 @@ interface Store {
   addEvent: (e: Omit<NowEvent, "id" | "done" | "nudges" | "schedule"> & Partial<Pick<NowEvent, "nudges" | "schedule">>) => NowEvent;
   toggleDone: (id: string) => void;
   splitTask: (id: string) => void;
+  setSteps: (id: string, steps: NowEvent["steps"]) => void;
+  addBigWin: (input: { label: string; date: string; note?: string }) => void;
+  setCustomParts: (hours: number, minutes: number) => ReturnType<typeof parseCustomDuration>;
   toggleStep: (eventId: string, stepId: string) => void;
   toggleNudge: (eventId: string, key: NudgeKey) => void;
   previewNudges: (eventId: string) => void;
@@ -161,7 +188,8 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
-      toast("Storage is full", { description: "Try removing a photo card or two." });
+      const locale = localeOf(stateRef.current.prefs);
+      toast(translate(locale, "storage.full"), { description: translate(locale, "storage.body") });
     }
   }, [state, ready]);
 
@@ -176,8 +204,14 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const addWin = useCallback((label: string) => {
-    setState((s) => ({ ...s, wins: [...s.wins, { id: uid(), date: toDateKey(new Date()), label }] }));
+  const addWin = useCallback((label: string, eventId?: string) => {
+    setState((s) => {
+      if (eventId && s.wins.some((w) => (w.kind ?? "small") === "small" && w.eventId === eventId)) return s;
+      return {
+        ...s,
+        wins: [...s.wins, { id: uid(), date: toDateKey(new Date()), label, kind: "small" as const, eventId }],
+      };
+    });
   }, []);
 
   // Wall-clock countdown. Background tabs and reloads read the deadline, not a drifted tick.
@@ -217,7 +251,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
             return;
           }
           ringing.current = end;
-          playBlockChime(String(end));
+          if (!quietNow(s.prefs)) playBlockChime(String(end));
           setState((prev) => ({
             ...prev,
             focus: {
@@ -232,23 +266,23 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
           }));
           return;
         }
-        if (
-          remaining <= 120 &&
-          ev.duration * 60 > 150 &&
-          warnedDeadline.current !== end &&
-          s.prefs.focusReminders
-        ) {
+        const leadMin = normalizeLead(s.prefs.focusLeadMin);
+        const already = f.twoMinNotified || warnedDeadline.current === end;
+        if (s.prefs.focusReminders && shouldLeadWarn(f.totalSec, remaining, leadMin, already)) {
           warnedDeadline.current = end;
-          notify("Two minutes left. Start landing the plane — gently.", { title: "Soft transition" });
+          if (!quietNow(s.prefs)) {
+            const copy = leadCopy(s.prefs, leadMin);
+            notify(copy.body, { title: copy.title });
+          }
         }
-        if (remaining !== f.remainingSec || f.endsAt !== end) {
+        if (remaining !== f.remainingSec || f.endsAt !== end || (warnedDeadline.current === end && !f.twoMinNotified)) {
           setState((prev) => ({
             ...prev,
             focus: {
               ...prev.focus,
               remainingSec: remaining,
               endsAt: end,
-              twoMinNotified: remaining <= 120,
+              twoMinNotified: warnedDeadline.current === end || prev.focus.twoMinNotified,
             },
           }));
         }
@@ -258,18 +292,24 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
       if (f.running && f.endsAt && !f.linkedToBlock) {
         const remaining = Math.max(0, Math.ceil((f.endsAt - Date.now()) / 1000));
         let next: FocusState = { ...f, remainingSec: remaining };
-        if (!f.twoMinNotified && remaining <= 120 && remaining > 0 && f.totalSec > 150 && warnedDeadline.current !== f.endsAt) {
+        const leadMin = normalizeLead(s.prefs.focusLeadMin);
+        const already = f.twoMinNotified || warnedDeadline.current === f.endsAt;
+        if (s.prefs.focusReminders && f.endsAt && shouldLeadWarn(f.totalSec, remaining, leadMin, already)) {
           warnedDeadline.current = f.endsAt;
           next.twoMinNotified = true;
-          if (s.prefs.focusReminders) {
-            notify("Two minutes left. Start landing the plane — gently.", { title: "Soft transition" });
+          if (!quietNow(s.prefs)) {
+            const copy = leadCopy(s.prefs, leadMin);
+            notify(copy.body, { title: copy.title });
           }
         }
         if (remaining === 0) {
           next = { ...next, running: false, endsAt: null, finished: true };
           if (unlinkedDone.current !== f.endsAt) {
             unlinkedDone.current = f.endsAt;
-            notify("Session complete. Check in when you're ready — no score.", { title: "You amplified" });
+            const locale = localeOf(s.prefs);
+            if (!quietNow(s.prefs)) {
+              notify(translate(locale, "timer.doneBody"), { title: translate(locale, "timer.doneTitle") });
+            }
           }
         }
         if (remaining !== f.remainingSec || next.finished || next.twoMinNotified !== f.twoMinNotified) {
@@ -302,14 +342,17 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
         if (ev.done) continue;
         const at = eventDate(ev).getTime();
         for (const tier of NUDGE_TIERS) {
-          if (!ev.nudges[tier.key]) continue;
+          if (!nudgeTierAllowed(s.prefs, ev.nudges[tier.key], tier.key)) continue;
           const key = `${ev.id}:${tier.key}`;
           if (s.firedNudges.includes(key)) continue;
           const target = at - tier.offsetMin * 60_000;
           const diff = now.getTime() - target;
           if (diff >= 0 && diff < 5 * 60_000) {
             fired.push(key);
-            if (!(s.prefs.quietHours && inQuietHours(now))) notify(nudgeCopy(tier.key, ev));
+            if (!quietNow(s.prefs, now)) {
+              const locale = localeOf(s.prefs);
+              notify(translate(locale, `nudge.${tier.key}`, { title: ev.title, time: formatLocaleTime(ev.time, locale) }));
+            }
           }
         }
       }
@@ -331,7 +374,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
         const full: NowEvent = {
           id: uid(),
           done: false,
-          nudges: e.nudges ?? { day: false, hour: true, ten: true, now: true },
+          nudges: e.nudges ?? stateRef.current.prefs.nudgeDefaults ?? DEFAULT_NUDGES,
           ...e,
           schedule: e.schedule === "fixed" ? "fixed" : "flexible",
         };
@@ -340,7 +383,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
       },
       toggleDone: (id) => {
         const ev = stateRef.current.events.find((e) => e.id === id);
-        if (ev && !ev.done) addWin(ev.title);
+        if (ev && !ev.done) addWin(ev.title, ev.id);
         updateEvent(id, (e) => {
           const next: NowEvent = { ...e, done: !e.done };
           if (e.steps) next.steps = e.steps.map((st) => ({ ...st, done: !e.done ? true : st.done }));
@@ -349,14 +392,42 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
       },
       splitTask: (id) =>
         updateEvent(id, (e) => (e.steps?.length ? e : { ...e, steps: splitIntoSteps(e.title) })),
+      setSteps: (id, steps) => updateEvent(id, (e) => ({ ...e, steps })),
+      addBigWin: (input) =>
+        update((s) => ({
+          ...s,
+          wins: [
+            ...s.wins,
+            {
+              id: uid(),
+              date: input.date,
+              label: input.label.trim(),
+              note: input.note?.trim() || undefined,
+              kind: "big" as const,
+            },
+          ],
+        })),
+      setCustomParts: (hours, minutes) => {
+        const parsed = parseCustomDuration(String(hours), String(minutes));
+        if (!parsed.ok) return parsed;
+        updateFocus((f) => {
+          const stored = { ...f, customHours: parsed.hours, customMinutes: parsed.minutes, customMin: parsed.total };
+          if (f.running || f.linkedToBlock || f.presetId !== "custom") return stored;
+          return {
+            ...stored,
+            totalSec: parsed.total * 60,
+            remainingSec: parsed.total * 60,
+            endsAt: null,
+            finished: false,
+            twoMinNotified: false,
+          };
+        });
+        return parsed;
+      },
       toggleStep: (eventId, stepId) => {
         const ev = stateRef.current.events.find((e) => e.id === eventId);
         if (!ev) return;
         const next = toggleStepPure(ev, stepId);
-        if (next.done && !ev.done) {
-          addWin(ev.title);
-          toast("All steps done", { description: `${ev.title} — that's a real win.` });
-        }
         updateEvent(eventId, () => next);
       },
       toggleNudge: (eventId, key) =>
@@ -366,10 +437,18 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
         if (!ev) return;
         const tiers = NUDGE_TIERS.filter((t) => ev.nudges[t.key]);
         if (!tiers.length) {
-          toast("No nudges on", { description: "Turn on a layer to preview it." });
+          const locale = localeOf(stateRef.current.prefs);
+          toast(translate(locale, "nudge.none"), { description: translate(locale, "nudge.noneBody") });
           return;
         }
-        tiers.forEach((t, i) => window.setTimeout(() => notify(nudgeCopy(t.key, ev)), i * 1400));
+        const locale = localeOf(stateRef.current.prefs);
+        const nudgeKey = { day: "nudge.day", hour: "nudge.hour", ten: "nudge.ten", now: "nudge.now" } as const;
+        tiers.forEach((t, i) =>
+          window.setTimeout(
+            () => notify(translate(locale, nudgeKey[t.key], { title: ev.title, time: formatLocaleTime(ev.time, locale) })),
+            i * 1400,
+          ),
+        );
       },
       setPrefs: (p) => update((s) => ({ ...s, prefs: { ...s.prefs, ...p } })),
       addCard: (c) =>
@@ -506,7 +585,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
             if (ev) {
               const plan = planBlockTimer(ev, new Date());
               if (plan.ended) {
-                if (f.alarmedAt !== plan.endsAt) playBlockChime(String(plan.endsAt));
+                if (f.alarmedAt !== plan.endsAt && !quietNow(s.prefs)) playBlockChime(String(plan.endsAt));
                 return {
                   ...s,
                   focus: {
@@ -575,9 +654,9 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
       startLinkedTimer: (eventId) => {
         const s = stateRef.current;
         const ev = s.events.find((e) => e.id === eventId);
-        if (!ev) return { ok: false, message: "That activity is no longer on your day." };
+        if (!ev) return { ok: false, message: translate(localeOf(stateRef.current.prefs), "timer.missing") };
         if (scheduleOf(ev) !== "flexible") {
-          return { ok: false, message: "Fixed events stay put. Start a separate focus if you want a timer." };
+          return { ok: false, message: translate(localeOf(stateRef.current.prefs), "timer.fixedSeparate") };
         }
         const plan = planBlockTimer(ev, new Date());
         setState((prev) => ({
@@ -603,16 +682,24 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
       extendLinked: (minutes, force = false) => {
         const s = stateRef.current;
         const id = s.focus.eventId;
-        if (!id || !s.focus.linkedToBlock) return { ok: false, message: "Start the activity timer first." };
+        if (!id || !s.focus.linkedToBlock) return { ok: false, message: translate(localeOf(s.prefs), "timer.needStart") };
         const ev = s.events.find((e) => e.id === id);
-        if (!ev) return { ok: false, message: "That activity is no longer on your day." };
+        if (!ev) return { ok: false, message: translate(localeOf(s.prefs), "timer.missing") };
         if (scheduleOf(ev) !== "flexible") {
-          return { ok: false, message: "Fixed events stay put. Reschedule to move one." };
+          return { ok: false, message: translate(localeOf(s.prefs), "timer.fixedStay") };
         }
         const planned = planExtension(ev, minutes, new Date());
-        if (!planned.ok) return planned;
+        if (!planned.ok) return { ok: false, message: explainScheduleError(localeOf(s.prefs), planned) };
         const hit = fixedConflict(s.events, ev.id, eventStartMs(ev), planned.plan.endMs, Date.now());
-        if (hit && !force) return { ok: false, reason: "conflict", message: conflictMessage(hit), minutes };
+        if (hit && !force) {
+          const locale = localeOf(s.prefs);
+          return {
+            ok: false,
+            reason: "conflict",
+            message: translate(locale, "conflict.overlap", { title: hit.title, time: formatLocaleTime(hit.time, locale) }),
+            minutes,
+          };
+        }
         const endMs = planned.plan.endMs;
         const remaining = Math.max(1, Math.ceil((endMs - Date.now()) / 1000));
         warnedDeadline.current = null;
@@ -639,7 +726,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
         const f = stateRef.current.focus;
         if (f.eventId) {
           const ev = stateRef.current.events.find((e) => e.id === f.eventId);
-          if (ev && !ev.done) addWin(ev.title);
+          if (ev && !ev.done) addWin(ev.title, ev.id);
           updateEvent(f.eventId, (e) => ({
             ...e,
             done: true,
@@ -702,7 +789,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
         const check = validateSlot(input);
         if (!check.ok) return check;
         const ev = stateRef.current.events.find((e) => e.id === id);
-        if (!ev) return { ok: false, message: "That activity is no longer on your day." };
+        if (!ev) return { ok: false, message: translate(localeOf(stateRef.current.prefs), "timer.missing") };
         const next = applyReschedule(ev, input);
         const moved = slotChanged(ev, input);
         setState((prev) => {
@@ -742,7 +829,17 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
           updateFocus((x) => extendFocusState(x, 5));
           return;
         }
-        addWin(f.label || "Focus session");
+        addWin(
+          f.label ||
+            translate(
+              resolvedLocale(
+                stateRef.current.prefs.locale,
+                typeof navigator === "undefined" ? undefined : navigator.language,
+              ),
+              "focus.session",
+            ),
+          f.eventId ?? undefined,
+        );
         if (f.eventId) {
           updateEvent(f.eventId, (e) => ({ ...e, done: true }));
         }

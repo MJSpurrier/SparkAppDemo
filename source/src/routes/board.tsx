@@ -3,6 +3,7 @@ import { ImageIcon, Link2, Play, Plus, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { toast } from "sonner";
 
+import { useT } from "@/lib/i18n/context";
 import { Loading } from "@/components/nowmode/Loading";
 import { Pill, ScreenHeader } from "@/components/nowmode/ScreenHeader";
 import { useUI } from "@/components/nowmode/ui-context";
@@ -38,6 +39,7 @@ interface Drag {
 }
 
 function BoardScreen() {
+  const t = useT();
   const { ready, state, moveCard, removeCard, addLink, removeLink } = useNowMode();
   const { openSheet } = useUI();
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -98,19 +100,19 @@ function BoardScreen() {
       return;
     }
     const ok = addLink(pending, id);
-    toast(ok ? "Connected" : "Already connected", { description: ok ? "Red string tied." : undefined });
+    toast(ok ? t("board.connected") : t("board.already"), { description: ok ? t("board.tied") : undefined });
     setPending(null);
   };
 
   return (
     <div className="flex h-full flex-col">
-      <ScreenHeader title="Board" right={<Pill>Drag · pin · connect</Pill>} />
+      <ScreenHeader title={t("nav.board")} right={<Pill>{t("board.hint")}</Pill>} />
 
       <div className="relative mx-5 min-h-0 flex-1 overflow-hidden rounded-[20px] border border-border2 bg-cork shadow-card">
         <div className="cork-grain pointer-events-none absolute inset-0" />
         {connect && (
           <p className="absolute inset-x-0 top-2 z-30 mx-auto w-fit rounded-full bg-ink/80 px-3 py-1 text-[11px] font-semibold text-foreground">
-            {pending ? "Now tap a second pin" : "Tap a pin to start a string"}
+            {pending ? t("board.second") : t("board.start")}
           </p>
         )}
         <div className="no-scrollbar h-full overflow-auto">
@@ -139,7 +141,9 @@ function BoardScreen() {
                   )}
                   style={{ left: p.x, top: p.y, width: CARD_W }}
                 >
-                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-dim">{c.kind}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-dim">
+                    {t(c.kind === "voice" ? "board.kind.voice" : c.kind === "photo" ? "board.kind.photo" : "board.kind.text")}
+                  </p>
                   {c.kind === "photo" &&
                     (c.image ? (
                       <img src={c.image} alt={c.text} draggable={false} className="mt-1.5 h-16 w-full rounded-md object-cover" />
@@ -160,12 +164,12 @@ function BoardScreen() {
                   {selected === c.id && !drag && (
                     <button
                       type="button"
-                      aria-label="Remove card"
+                      aria-label={t("board.removeCard")}
                       onPointerDown={(e) => e.stopPropagation()}
                       onClick={() => {
                         removeCard(c.id);
                         setSelected(null);
-                        toast("Card removed");
+                        toast(t("board.removed"));
                       }}
                       className="absolute -right-2 -top-2 grid size-6 place-items-center rounded-full border border-border2 bg-background text-muted-foreground"
                     >
@@ -202,12 +206,12 @@ function BoardScreen() {
                       style={{ pointerEvents: connect ? "none" : "stroke" }}
                       onClick={() => {
                         removeLink(l.id);
-                        toast("String removed", {
-                          action: { label: "Undo", onClick: () => addLink(l.from, l.to) },
+                        toast(t("board.stringRemoved"), {
+                          action: { label: t("board.undo"), onClick: () => addLink(l.from, l.to) },
                         });
                       }}
                     >
-                      <title>Tap to remove string</title>
+                      <title>{t("board.removeString")}</title>
                     </path>
                   </g>
                 );
@@ -222,7 +226,7 @@ function BoardScreen() {
                 <button
                   key={`pin-${c.id}`}
                   type="button"
-                  aria-label={`Pin on ${c.text}`}
+                  aria-label={t("board.pin", { text: c.text })}
                   onClick={() => tapPin(c.id)}
                   className="absolute z-20 grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center"
                   style={{ left: p.x + CARD_W / 2, top: p.y }}
@@ -247,7 +251,7 @@ function BoardScreen() {
           onClick={() => openSheet("board")}
           className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-blue/70 bg-blue/10 text-sm font-semibold text-blue"
         >
-          <Plus className="size-4" /> Card
+          <Plus className="size-4" /> {t("board.card")}
         </button>
         <button
           type="button"
@@ -261,14 +265,14 @@ function BoardScreen() {
             connect ? "border-string/70 bg-string/15 text-foreground" : "border-border2 bg-card text-foreground",
           )}
         >
-          <Link2 className="size-4" /> {connect ? "Done" : "Connect"}
+          <Link2 className="size-4" /> {connect ? t("board.done") : t("board.connect")}
         </button>
         <button
           type="button"
           onClick={() => setScale((s) => (s === 1 ? 0.75 : 1))}
           className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-border2 bg-card text-sm font-semibold"
         >
-          {scale === 1 ? <ZoomOut className="size-4" /> : <ZoomIn className="size-4" />} Zoom
+          {scale === 1 ? <ZoomOut className="size-4" /> : <ZoomIn className="size-4" />} {t("board.zoom")}
         </button>
       </div>
     </div>

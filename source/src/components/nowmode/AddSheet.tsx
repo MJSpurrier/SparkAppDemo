@@ -2,8 +2,12 @@ import { Camera, ChevronLeft, Mic, MicOff, Type, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { useT } from "@/lib/i18n/context";
+import { formatLocaleTime } from "@/lib/i18n/format";
+import { useLocale } from "@/lib/i18n/context";
+import { explainScheduleError } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/button";
-import { addDays, formatTime, nextHalfHour, parseCapture, toDateKey } from "@/lib/nowmode/logic";
+import { addDays, nextHalfHour, parseCapture, toDateKey } from "@/lib/nowmode/logic";
 import { parseMinutesInput, validateSlot } from "@/lib/nowmode/schedule";
 import { useNowMode } from "@/lib/nowmode/store";
 import type { ScheduleType } from "@/lib/nowmode/types";
@@ -43,13 +47,14 @@ async function fileToSmallDataUrl(file: File, max = 640): Promise<string> {
   }
 }
 
-const options: { tab: SheetTab; label: string; hint: string; icon: typeof Type; tone: string }[] = [
-  { tab: "text", label: "Text", hint: "“Call mom 3pm”", icon: Type, tone: "text-blue" },
-  { tab: "voice", label: "Voice", hint: "Brain dump out loud", icon: Mic, tone: "text-teal" },
-  { tab: "photo", label: "Photo", hint: "Snap sticky notes", icon: Camera, tone: "text-coral" },
+const options = [
+  { tab: "text" as const, label: "capture.text" as const, hint: "capture.textHint" as const, icon: Type, tone: "text-blue" },
+  { tab: "voice" as const, label: "capture.voice" as const, hint: "capture.voiceHint" as const, icon: Mic, tone: "text-teal" },
+  { tab: "photo" as const, label: "capture.photo" as const, hint: "capture.photoHint" as const, icon: Camera, tone: "text-coral" },
 ];
 
 export function AddSheet() {
+  const t = useT();
   const { sheetOpen, sheetMode, sheetTab, setSheetTab, closeSheet } = useUI();
 
   useEffect(() => {
@@ -62,10 +67,10 @@ export function AddSheet() {
   if (!sheetOpen) return null;
 
   return (
-    <div className="absolute inset-0 z-20" role="dialog" aria-modal="true" aria-label="Add">
+    <div className="absolute inset-0 z-20" role="dialog" aria-modal="true" aria-label={t("capture.addAria")}>
       <button
         type="button"
-        aria-label="Close"
+        aria-label={t("common.close")}
         onClick={closeSheet}
         className="animate-fade-soft absolute inset-0 bg-ink/70 backdrop-blur-[2px]"
       />
@@ -75,7 +80,7 @@ export function AddSheet() {
           {sheetTab !== "menu" && (
             <button
               type="button"
-              aria-label="Back to options"
+              aria-label={t("capture.back")}
               onClick={() => setSheetTab("menu")}
               className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-card"
             >
@@ -84,15 +89,19 @@ export function AddSheet() {
           )}
           <div className="min-w-0 flex-1">
             <h2 className="text-lg font-bold">
-              {sheetTab === "menu" ? (sheetMode === "board" ? "New board card" : "Get it out of your head") : options.find((o) => o.tab === sheetTab)?.label}
+              {sheetTab === "menu"
+                ? sheetMode === "board"
+                  ? t("capture.boardHead")
+                  : t("capture.head")
+                : t(options.find((o) => o.tab === sheetTab)?.label ?? "capture.text")}
             </h2>
             {sheetTab === "menu" && (
-              <p className="text-xs text-muted-foreground">Capture now, sort later. Nothing is lost.</p>
+              <p className="text-xs text-muted-foreground">{t("capture.sub")}</p>
             )}
           </div>
           <button
             type="button"
-            aria-label="Close"
+            aria-label={t("common.close")}
             onClick={closeSheet}
             className="grid size-8 place-items-center rounded-lg text-dim hover:bg-card hover:text-foreground"
           >
@@ -112,8 +121,8 @@ export function AddSheet() {
                 <span className="grid size-11 place-items-center rounded-xl bg-background">
                   <Icon className={`size-5 ${tone}`} />
                 </span>
-                <span className="text-sm font-semibold">{label}</span>
-                <span className="text-[11px] leading-tight text-dim">{hint}</span>
+                <span className="text-sm font-semibold">{t(label)}</span>
+                <span className="text-[11px] leading-tight text-dim">{t(hint)}</span>
               </button>
             ))}
           </div>
@@ -127,6 +136,8 @@ export function AddSheet() {
 }
 
 function TextCapture() {
+  const t = useT();
+  const locale = useLocale();
   const { addEvent, addCard } = useNowMode();
   const { sheetMode, closeSheet } = useUI();
   const [text, setText] = useState("");
@@ -140,13 +151,13 @@ function TextCapture() {
     if (!text.trim()) return;
     if (boardOnly) {
       addCard({ kind: "text", text: text.trim() });
-      toast("Pinned to Board");
+      toast(t("capture.pinned"));
       closeSheet();
       return;
     }
     const length = parseMinutesInput(minutes);
     if (!length.ok) {
-      setError(length.message);
+      setError(explainScheduleError(locale, length));
       return;
     }
     const now = new Date();
@@ -154,7 +165,7 @@ function TextCapture() {
     const date = toDateKey(addDays(now, parsed.dayOffset));
     const slot = validateSlot({ date, time, duration: length.minutes });
     if (!slot.ok) {
-      setError(slot.message);
+      setError(explainScheduleError(locale, slot));
       return;
     }
     addEvent({
@@ -167,8 +178,12 @@ function TextCapture() {
       schedule,
     });
     addCard({ kind: "text", text: text.trim() });
-    toast("Captured", {
-      description: `${parsed.dayOffset ? "Tomorrow" : "Today"} at ${formatTime(time)} · ${schedule} · also pinned to Board`,
+    toast(t("capture.saved"), {
+      description: t("capture.savedBody", {
+        when: parsed.dayOffset ? t("capture.tomorrow") : t("capture.today"),
+        time: formatLocaleTime(time, locale),
+        kind: t(schedule === "fixed" ? "badge.fixed" : "badge.flexible"),
+      }),
     });
     closeSheet();
   };
@@ -186,21 +201,21 @@ function TextCapture() {
         value={text}
         onChange={(e) => setText(e.target.value)}
         rows={3}
-        placeholder={boardOnly ? "A thought, a clue, a maybe…" : "Call mom 3pm · Pay rent tomorrow 10am"}
+        placeholder={boardOnly ? t("capture.boardPh") : t("capture.ph")}
         className="w-full resize-none rounded-2xl border border-border2 bg-card px-4 py-3 text-[15px] placeholder:text-dim focus:border-blue focus:outline-none"
       />
       {!boardOnly && text.trim() && (
         <p className="rounded-xl bg-card px-3 py-2 text-xs text-muted-foreground">
           → <span className="font-semibold text-foreground">{parsed.title}</span> ·{" "}
-          {parsed.dayOffset ? "Tomorrow" : "Today"} ·{" "}
-          <span className="text-blue">{parsed.time ? formatTime(parsed.time) : "next free half-hour"}</span>
+          {parsed.dayOffset ? t("capture.tomorrow") : t("capture.today")} ·{" "}
+          <span className="text-blue">{parsed.time ? formatLocaleTime(parsed.time, locale) : t("capture.next")}</span>
         </p>
       )}
       {!boardOnly && (
         <>
           <ScheduleTypeField value={schedule} onChange={setSchedule} name="capture-schedule" />
           <label className="block text-xs font-semibold">
-            Length in minutes
+            {t("capture.length")}
             <input
               inputMode="numeric"
               value={minutes}
@@ -219,13 +234,14 @@ function TextCapture() {
         </p>
       )}
       <Button type="submit" size="lg" className="h-12 w-full rounded-xl text-[15px] font-semibold" disabled={!text.trim()}>
-        {boardOnly ? "Pin to Board" : "Add to Today + Board"}
+        {boardOnly ? t("capture.pin") : t("capture.addBoth")}
       </Button>
     </form>
   );
 }
 
 function VoiceCapture() {
+  const t = useT();
   const { addCard } = useNowMode();
   const { closeSheet } = useUI();
   const recRef = useRef<any>(null);
@@ -251,7 +267,7 @@ function VoiceCapture() {
     };
     rec.onerror = () => {
       setListening(false);
-      toast("Mic paused", { description: "We couldn't hear that — try again or type it." });
+      toast(t("capture.micPaused"), { description: t("capture.micBody") });
     };
     rec.onend = () => setListening(false);
     recRef.current = rec;
@@ -265,8 +281,8 @@ function VoiceCapture() {
   };
 
   const save = (demo = false) => {
-    addCard({ kind: "voice", text: demo ? "0:30 demo brain dump" : transcript.trim() || "Voice note" });
-    toast("Voice card pinned to Board");
+    addCard({ kind: "voice", text: demo ? t("capture.demoText") : transcript.trim() || t("capture.voiceNote") });
+    toast(t("capture.voicePinned"));
     closeSheet();
   };
 
@@ -274,10 +290,10 @@ function VoiceCapture() {
     return (
       <div className="space-y-3">
         <p className="rounded-2xl border border-border2 bg-card px-4 py-4 text-sm text-muted-foreground">
-          Voice capture isn't available in this browser. You can still pin a demo voice card to see how it works.
+          {t("capture.voiceNo")}
         </p>
         <Button size="lg" className="h-12 w-full rounded-xl" onClick={() => save(true)}>
-          Add demo voice card
+          {t("capture.demo")}
         </Button>
       </div>
     );
@@ -288,7 +304,7 @@ function VoiceCapture() {
       <div className="flex min-h-24 items-start gap-3 rounded-2xl border border-border2 bg-card px-4 py-3">
         <span className={`mt-1 size-2.5 shrink-0 rounded-full ${listening ? "animate-breathe bg-teal" : "bg-dim"}`} />
         <p className="text-sm text-muted-foreground">
-          {transcript || (listening ? "Listening… say it messy, that's fine." : "Tap the mic and talk it out.")}
+          {transcript || (listening ? t("capture.listen") : t("capture.talk"))}
         </p>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -298,10 +314,10 @@ function VoiceCapture() {
           className="h-12 rounded-xl"
           onClick={listening ? stop : start}
         >
-          {listening ? <MicOff /> : <Mic />} {listening ? "Stop" : "Start mic"}
+          {listening ? <MicOff /> : <Mic />} {listening ? t("capture.stopMic") : t("capture.mic")}
         </Button>
         <Button size="lg" className="h-12 rounded-xl" disabled={!transcript.trim()} onClick={() => save()}>
-          Pin to Board
+          {t("capture.pin")}
         </Button>
       </div>
     </div>
@@ -309,6 +325,7 @@ function VoiceCapture() {
 }
 
 function PhotoCapture() {
+  const t = useT();
   const { addCard } = useNowMode();
   const { closeSheet } = useUI();
   const [image, setImage] = useState<string | null>(null);
@@ -317,8 +334,8 @@ function PhotoCapture() {
   const save = () => {
     if (!image) return;
     // TODO: OCR / AI parsing — extract text & dates from the photo and suggest Today events.
-    addCard({ kind: "photo", text: caption.trim() || "Photo capture", image });
-    toast("Photo pinned to Board");
+    addCard({ kind: "photo", text: caption.trim() || t("capture.photoNote"), image });
+    toast(t("capture.photoPinned"));
     closeSheet();
   };
 
@@ -326,12 +343,12 @@ function PhotoCapture() {
     <div className="space-y-3">
       <label className="flex cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border border-dashed border-border2 bg-card px-4 py-6 text-center hover:bg-card2">
         {image ? (
-          <img src={image} alt="Selected capture" className="max-h-40 rounded-xl object-contain" />
+          <img src={image} alt={t("capture.photoAlt")} className="max-h-40 rounded-xl object-contain" />
         ) : (
           <>
             <Camera className="size-6 text-coral" />
-            <span className="text-sm font-semibold">Take or choose a photo</span>
-            <span className="text-[11px] text-dim">Sticky notes, whiteboards, letters</span>
+            <span className="text-sm font-semibold">{t("capture.photoBtn")}</span>
+            <span className="text-[11px] text-dim">{t("capture.photoSub")}</span>
           </>
         )}
         <input
@@ -348,11 +365,11 @@ function PhotoCapture() {
       <input
         value={caption}
         onChange={(e) => setCaption(e.target.value)}
-        placeholder="Caption (optional)"
+        placeholder={t("capture.caption")}
         className="h-11 w-full rounded-xl border border-border2 bg-card px-4 text-sm placeholder:text-dim focus:border-blue focus:outline-none"
       />
       <Button size="lg" className="h-12 w-full rounded-xl" disabled={!image} onClick={save}>
-        Pin to Board
+        {t("capture.pin")}
       </Button>
     </div>
   );

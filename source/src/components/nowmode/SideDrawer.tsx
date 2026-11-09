@@ -1,27 +1,35 @@
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, HandHeart, Home, MessageSquareText, Sparkles, Target, UserRound, Waypoints, X } from "lucide-react";
+import { CalendarDays, HandHeart, Home, MessageSquareText, Sparkles, Target, Trophy, UserRound, Waypoints, X } from "lucide-react";
 import { useEffect } from "react";
 
+import { useT } from "@/lib/i18n/context";
+import type { MessageKey } from "@/lib/i18n/messages";
 import { useNowMode } from "@/lib/nowmode/store";
 import { toDateKey } from "@/lib/nowmode/logic";
 import { Logo } from "./Logo";
 import { useUI } from "./ui-context";
 
 const rail = [
-  { to: "/", label: "Today", icon: Home },
-  { to: "/calendar", label: "Calendar", icon: CalendarDays },
-  { to: "/board", label: "Board", icon: Waypoints },
-  { to: "/focus", label: "Focus", icon: Target },
+  { to: "/", label: "nav.today", icon: Home },
+  { to: "/calendar", label: "nav.calendar", icon: CalendarDays },
+  { to: "/board", label: "nav.board", icon: Waypoints },
+  { to: "/focus", label: "nav.focus", icon: Target },
+] as const;
+
+const shortcuts = [
+  { to: "/focus", label: "nav.focus", hint: "drawer.focusHint", icon: Target },
+  { to: "/wins", label: "nav.wins", hint: "drawer.winsHint", icon: Trophy },
 ] as const;
 
 const destinations = [
-  { to: "/account", label: "Account", hint: "Profile, nudges, quiet hours", icon: UserRound },
-  { to: "/mission", label: "Our Mission", hint: "Why Now Mode exists", icon: Sparkles },
-  { to: "/support", label: "Support Now Mode", hint: "Optional, always", icon: HandHeart },
-  { to: "/feedback", label: "Send feedback", hint: "Tell us what helps", icon: MessageSquareText },
+  { to: "/account", label: "nav.account", hint: "drawer.accountHint", icon: UserRound },
+  { to: "/mission", label: "nav.mission", hint: "drawer.missionHint", icon: Sparkles },
+  { to: "/support", label: "nav.support", hint: "drawer.supportHint", icon: HandHeart },
+  { to: "/feedback", label: "nav.feedback", hint: "drawer.feedbackHint", icon: MessageSquareText },
 ] as const;
 
 export function SideDrawer() {
+  const t = useT();
   const { drawerOpen, setDrawerOpen } = useUI();
   const { state } = useNowMode();
   const close = () => setDrawerOpen(false);
@@ -37,10 +45,10 @@ export function SideDrawer() {
   const winsToday = state.wins.filter((w) => w.date === toDateKey(new Date())).length;
 
   return (
-    <div className="absolute inset-0 z-40" role="dialog" aria-modal="true" aria-label="Menu">
+    <div className="absolute inset-0 z-40" role="dialog" aria-modal="true" aria-label={t("nav.menu")}>
       <button
         type="button"
-        aria-label="Close menu"
+        aria-label={t("nav.close")}
         onClick={close}
         className="animate-fade-soft absolute inset-0 bg-ink/70 backdrop-blur-[2px]"
       />
@@ -54,7 +62,7 @@ export function SideDrawer() {
               key={to}
               to={to}
               onClick={close}
-              aria-label={label}
+              aria-label={t(label)}
               activeOptions={{ exact: true }}
               className="grid size-11 place-items-center rounded-2xl bg-card text-muted-foreground transition-all hover:rounded-xl hover:text-foreground data-[status=active]:rounded-xl data-[status=active]:bg-blue data-[status=active]:text-primary-foreground"
             >
@@ -67,12 +75,12 @@ export function SideDrawer() {
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-center justify-between border-b border-border px-4 py-5">
             <div className="min-w-0">
-              <p className="truncate text-base font-bold">Now Mode</p>
-              <p className="truncate text-xs text-muted-foreground">One thing at a time</p>
+              <p className="truncate text-base font-bold">{t("app.name")}</p>
+              <p className="truncate text-xs text-muted-foreground">{t("drawer.tagline")}</p>
             </div>
             <button
               type="button"
-              aria-label="Close menu"
+              aria-label={t("nav.close")}
               onClick={close}
               className="grid size-8 shrink-0 place-items-center rounded-lg text-dim hover:bg-card hover:text-foreground"
             >
@@ -80,10 +88,10 @@ export function SideDrawer() {
             </button>
           </div>
 
-          <nav className="flex-1 overflow-y-auto px-2 py-4" aria-label="More">
-            <p className="px-2 pb-2 text-[11px] font-bold uppercase tracking-wider text-dim">You &amp; Now Mode</p>
+          <nav className="flex-1 overflow-y-auto px-2 py-4" aria-label={t("nav.more")}>
+            <p className="px-2 pb-2 text-[11px] font-bold uppercase tracking-wider text-dim">{t("drawer.section")}</p>
             <ul className="space-y-1">
-              {destinations.map(({ to, label, hint, icon: Icon }) => (
+              {[...shortcuts, ...destinations].map(({ to, label, hint, icon: Icon }) => (
                 <li key={to}>
                   <Link
                     to={to}
@@ -92,8 +100,8 @@ export function SideDrawer() {
                   >
                     <Icon className="size-[18px] shrink-0" strokeWidth={1.8} />
                     <span className="min-w-0">
-                      <span className="block truncate text-sm font-semibold">{label}</span>
-                      <span className="block truncate text-[11px] text-dim">{hint}</span>
+                      <span className="block truncate text-sm font-semibold">{t(label)}</span>
+                      <span className="block truncate text-[11px] text-dim">{t(hint)}</span>
                     </span>
                   </Link>
                 </li>
@@ -106,8 +114,8 @@ export function SideDrawer() {
               Y
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">You</p>
-              <p className="truncate text-[11px] text-green">● {winsToday} gentle wins today</p>
+              <p className="truncate text-sm font-semibold">{t("drawer.you")}</p>
+              <p className="truncate text-[11px] text-green">● {t("drawer.winsToday", { n: winsToday })}</p>
             </div>
           </div>
         </div>

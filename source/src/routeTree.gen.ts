@@ -17,6 +17,7 @@ import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as FocusRouteImport } from './routes/focus'
 import { Route as MissionRouteImport } from './routes/mission'
 import { Route as SupportRouteImport } from './routes/support'
+import { Route as WinsRouteImport } from './routes/wins'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -58,6 +59,11 @@ const SupportRoute = SupportRouteImport.update({
   path: '/support',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WinsRoute = WinsRouteImport.update({
+  id: '/wins',
+  path: '/wins',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -68,6 +74,7 @@ export interface FileRoutesByFullPath {
   '/focus': typeof FocusRoute
   '/mission': typeof MissionRoute
   '/support': typeof SupportRoute
+  '/wins': typeof WinsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByTo {
   '/focus': typeof FocusRoute
   '/mission': typeof MissionRoute
   '/support': typeof SupportRoute
+  '/wins': typeof WinsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,6 +97,7 @@ export interface FileRoutesById {
   '/focus': typeof FocusRoute
   '/mission': typeof MissionRoute
   '/support': typeof SupportRoute
+  '/wins': typeof WinsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,6 +110,7 @@ export interface FileRouteTypes {
     | '/focus'
     | '/mission'
     | '/support'
+    | '/wins'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -111,6 +121,7 @@ export interface FileRouteTypes {
     | '/focus'
     | '/mission'
     | '/support'
+    | '/wins'
   id:
     | '__root__'
     | '/'
@@ -121,6 +132,7 @@ export interface FileRouteTypes {
     | '/focus'
     | '/mission'
     | '/support'
+    | '/wins'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -132,6 +144,7 @@ export interface RootRouteChildren {
   FocusRoute: typeof FocusRoute
   MissionRoute: typeof MissionRoute
   SupportRoute: typeof SupportRoute
+  WinsRoute: typeof WinsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -192,6 +205,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SupportRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/wins': {
+      id: '/wins'
+      path: '/wins'
+      fullPath: '/wins'
+      preLoaderRoute: typeof WinsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -204,6 +224,7 @@ const rootRouteChildren: RootRouteChildren = {
   FocusRoute: FocusRoute,
   MissionRoute: MissionRoute,
   SupportRoute: SupportRoute,
+  WinsRoute: WinsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

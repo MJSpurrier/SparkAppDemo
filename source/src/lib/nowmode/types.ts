@@ -59,12 +59,27 @@ export interface Prefs {
   layeredNudges: boolean;
   focusReminders: boolean;
   quietHours: boolean;
+  /** Saved language. Missing means follow the browser, with English as the fallback. */
+  locale?: "en" | "es-419" | "es-ES";
+  /** Master filter for which nudge layers may fire. Per-event switches still apply inside this. */
+  nudgeDefaults?: Nudges;
+  /** Minutes before a focus timer ends to show the soft landing warning. */
+  focusLeadMin?: number;
+  /** Local HH:MM. A later end than start is the same day; an earlier end crosses midnight. */
+  quietStart?: string;
+  quietEnd?: string;
+  themeMode?: "light" | "dark";
+  palette?: "ocean" | "lavender" | "forest";
 }
 
 export interface Win {
   id: string;
   date: string;
   label: string;
+  /** Missing on older saves means a small win from a finished task. */
+  kind?: "small" | "big";
+  note?: string;
+  eventId?: string;
 }
 
 export interface FocusState {
@@ -80,6 +95,9 @@ export interface FocusState {
   twoMinNotified: boolean;
   finished: boolean;
   customMin: number;
+  /** Typed custom duration. Missing values are derived from customMin. */
+  customHours?: number;
+  customMinutes?: number;
   /** Wall-clock deadline already announced, so the same end doesn't chime twice. */
   alarmedAt: number | null;
   /** When true, the countdown deadline is the linked event's end, not a free-floating preset. */

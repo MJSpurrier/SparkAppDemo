@@ -1,28 +1,159 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { BellRing, Moon, LogOut, Palette, Timer } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Loading } from "@/components/nowmode/Loading";
 import { ScreenHeader } from "@/components/nowmode/ScreenHeader";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { useLocale, useT } from "@/lib/i18n/context";
+import { formatLocaleTime } from "@/lib/i18n/format";
+import { LOCALES, type LocaleId } from "@/lib/i18n/locale";
 import { useNowMode } from "@/lib/nowmode/store";
+import {
+  DEFAULT_NUDGES,
+  DEFAULT_QUIET_END,
+  DEFAULT_QUIET_START,
+  normalizeLead,
+  normalizePalette,
+  normalizeTheme,
+  quietRangeError,
+  type PaletteId,
+  type ThemeMode,
+} from "@/lib/nowmode/settings";
+import type { Nudges, Prefs } from "@/lib/nowmode/types";
 
 export const Route = createFileRoute("/account")({
   head: () => ({
-    meta: [
-      { title: "Account · Now Mode" },
-      { name: "description", content: "Your Now Mode profile, plan, and gentle nudge preferences." },
-      { property: "og:title", content: "Account · Now Mode" },
-      { property: "og:description", content: "Your Now Mode profile, plan, and gentle nudge preferences." },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
-    ],
+    meta: [{ title: "Account · Now Mode" }, { name: "description", content: "Language, reminders, quiet hours, and theme." }],
   }),
   component: Account,
 });
 
-function Row({ icon, title, hint, children }: { icon: ReactNode; title: string; hint: string; children: ReactNode }) {
+function Account() {
+  const t = useT();
+  const locale = useLocale();
+  const { ready, state, setPrefs } = useNowMode();
+  const [editing, setEditing] = useState<null | "nudges" | "focus" | "quiet" | "theme">(null);
+  if (!ready) return <Loading />;
+  const p = state.prefs;
+  const quietStart = p.quietStart ?? DEFAULT_QUIET_START;
+  const quietEnd = p.quietEnd ?? DEFAULT_QUIET_END;
+
+  return (
+    <div className="pb-8">
+      <ScreenHeader back title={t("account.title")} />
+      <div className="space-y-5 px-5">
+        <section className="flex items-center gap-4 rounded-[20px] border border-border2 bg-hero p-5">
+          <div className="grid size-14 shrink-0 place-items-center rounded-full bg-card2 text-xl font-bold text-teal ring-1 ring-border2">Y</div>
+          <div className="min-w-0">
+            <p className="truncate text-lg font-bold">{t("account.name")}</p>
+            <p className="truncate text-sm text-muted-foreground">you@example.com</p>
+            <span className="mt-2 inline-block rounded-full border border-blue/40 bg-blue/10 px-2.5 py-0.5 text-[11px] font-semibold text-blue">{t("account.plan")}</span>
+          </div>
+        </section>
+
+        <section>
+          <h2 className="px-1 pb-2 text-[11px] font-bold uppercase tracking-wider text-dim">{t("account.language")}</h2>
+          <label className="block rounded-2xl border border-border bg-card px-4 py-3">
+            <span className="block text-sm font-semibold">{t("account.language")}</span>
+            <span className="block text-xs text-dim">{t("account.languageHint")}</span>
+            <select
+              value={locale}
+              onChange={(e) => setPrefs({ locale: e.target.value as LocaleId })}
+              className="mt-2 h-11 w-full rounded-xl border border-border2 bg-background px-3 text-sm focus:border-blue focus:outline-none"
+            >
+              {LOCALES.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
+
+        <section>
+          <h2 className="px-1 pb-2 text-[11px] font-bold uppercase tracking-wider text-dim">{t("account.section")}</h2>
+          <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+            <SettingRow
+              icon={<BellRing className="size-4" />}
+              title={t("account.nudges")}
+              hint={t("account.nudgesHint")}
+              checked={p.layeredNudges}
+              onChecked={(v) => setPrefs({ layeredNudges: v })}
+              label={t("account.nudges")}
+              editLabel={t("account.edit")}
+              onEdit={() => setEditing("nudges")}
+            />
+            <SettingRow
+              icon={<Timer className="size-4" />}
+              title={t("account.focus")}
+              hint={t("account.focusHint")}
+              checked={p.focusReminders}
+              onChecked={(v) => setPrefs({ focusReminders: v })}
+              label={t("account.focus")}
+              editLabel={t("account.edit")}
+              onEdit={() => setEditing("focus")}
+            />
+            <SettingRow
+              icon={<Moon className="size-4" />}
+              title={t("account.quiet")}
+              hint={t("account.quietHint", { start: formatLocaleTime(quietStart, locale), end: formatLocaleTime(quietEnd, locale) })}
+              checked={p.quietHours}
+              onChecked={(v) => setPrefs({ quietHours: v })}
+              label={t("account.quiet")}
+              editLabel={t("account.edit")}
+              onEdit={() => setEditing("quiet")}
+            />
+            <div className="flex items-center gap-3 px-4 py-3.5">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-card2 text-muted-foreground">
+                <Palette className="size-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">{t("account.theme")}</span>
+                <span className="block text-xs text-dim">{t("account.themeHint")}</span>
+              </span>
+              <Button type="button" variant="secondary" size="sm" className="h-9 rounded-xl" onClick={() => setEditing("theme")}>
+                {t("account.edit")}
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        <button
+          type="button"
+          onClick={() => toast(t("account.soon"), { description: t("account.soonBody") })}
+          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-card py-3.5 text-sm font-semibold text-muted-foreground hover:text-foreground"
+        >
+          <LogOut className="size-4" /> {t("account.signOut")}
+        </button>
+        <p className="text-center text-xs text-dim">{t("account.device")}</p>
+      </div>
+      {editing && <Editor kind={editing} prefs={p} onClose={() => setEditing(null)} />}
+    </div>
+  );
+}
+
+function SettingRow({
+  icon,
+  title,
+  hint,
+  checked,
+  onChecked,
+  label,
+  editLabel,
+  onEdit,
+}: {
+  icon: ReactNode;
+  title: string;
+  hint: string;
+  checked: boolean;
+  onChecked: (v: boolean) => void;
+  label: string;
+  editLabel: string;
+  onEdit: () => void;
+}) {
   return (
     <div className="flex items-center gap-3 px-4 py-3.5">
       <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-card2 text-muted-foreground">{icon}</span>
@@ -30,60 +161,240 @@ function Row({ icon, title, hint, children }: { icon: ReactNode; title: string; 
         <span className="block text-sm font-semibold">{title}</span>
         <span className="block text-xs text-dim">{hint}</span>
       </span>
-      {children}
+      <Button type="button" variant="secondary" size="sm" className="h-9 rounded-xl" onClick={onEdit}>
+        {editLabel}
+      </Button>
+      <Switch checked={checked} onCheckedChange={onChecked} aria-label={label} />
     </div>
   );
 }
 
-function Account() {
-  const { ready, state, setPrefs } = useNowMode();
-  if (!ready) return <Loading />;
-  const p = state.prefs;
+function Editor({ kind, prefs, onClose }: { kind: "nudges" | "focus" | "quiet" | "theme"; prefs: Prefs; onClose: () => void }) {
+  const t = useT();
+  const { setPrefs } = useNowMode();
+  const snapshot = {
+    themeMode: normalizeTheme(prefs.themeMode),
+    palette: normalizePalette(prefs.palette),
+  };
 
   return (
-    <div className="pb-8">
-      <ScreenHeader back title="Account" />
-      <div className="space-y-5 px-5">
-        <section className="flex items-center gap-4 rounded-[20px] border border-border2 bg-hero p-5">
-          <div className="grid size-14 shrink-0 place-items-center rounded-full bg-card2 text-xl font-bold text-teal ring-1 ring-border2">
-            Y
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-lg font-bold">Your name</p>
-            <p className="truncate text-sm text-muted-foreground">you@example.com</p>
-            <span className="mt-2 inline-block rounded-full border border-blue/40 bg-blue/10 px-2.5 py-0.5 text-[11px] font-semibold text-blue">
-              Now Mode Free
-            </span>
-          </div>
-        </section>
-
-        <section>
-          <h2 className="px-1 pb-2 text-[11px] font-bold uppercase tracking-wider text-dim">Gentle settings</h2>
-          <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
-            <Row icon={<BellRing className="size-4" />} title="Layered nudges" hint="Glance · Nudge · Pull · Due">
-              <Switch checked={p.layeredNudges} onCheckedChange={(v) => setPrefs({ layeredNudges: v })} aria-label="Layered nudges" />
-            </Row>
-            <Row icon={<Timer className="size-4" />} title="Focus reminders" hint="Soft heads-up at 2 minutes left">
-              <Switch checked={p.focusReminders} onCheckedChange={(v) => setPrefs({ focusReminders: v })} aria-label="Focus reminders" />
-            </Row>
-            <Row icon={<Moon className="size-4" />} title="Quiet hours" hint="No nudges 10pm – 7am">
-              <Switch checked={p.quietHours} onCheckedChange={(v) => setPrefs({ quietHours: v })} aria-label="Quiet hours" />
-            </Row>
-            <Row icon={<Palette className="size-4" />} title="Theme" hint="Easy on the eyes">
-              <span className="text-sm font-semibold text-muted-foreground">Dark · calm</span>
-            </Row>
-          </div>
-        </section>
-
-        <button
-          type="button"
-          onClick={() => toast("Accounts are coming soon", { description: "Everything stays saved on this device for now." })}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl border border-border bg-card py-3.5 text-sm font-semibold text-muted-foreground hover:text-foreground"
-        >
-          <LogOut className="size-4" /> Sign out
-        </button>
-        <p className="text-center text-xs text-dim">Your plans live on this device only.</p>
+    <div className="fixed inset-0 z-40" role="dialog" aria-modal="true">
+      <button
+        type="button"
+        className="absolute inset-0 bg-ink/70"
+        aria-label={t("common.cancel")}
+        onClick={() => {
+          if (kind === "theme") setPrefs(snapshot);
+          onClose();
+        }}
+      />
+      <div className="absolute inset-x-0 bottom-0 max-h-[92%] overflow-y-auto rounded-t-3xl border-x border-t border-border2 bg-bg2 px-5 pb-6 pt-4 shadow-shell">
+        {kind === "nudges" && <NudgeEditor prefs={prefs} onClose={onClose} />}
+        {kind === "focus" && <FocusEditor prefs={prefs} onClose={onClose} />}
+        {kind === "quiet" && <QuietEditor prefs={prefs} onClose={onClose} />}
+        {kind === "theme" && <ThemeEditor prefs={prefs} onClose={onClose} snapshot={snapshot} />}
       </div>
+    </div>
+  );
+}
+
+function NudgeEditor({ prefs, onClose }: { prefs: Prefs; onClose: () => void }) {
+  const t = useT();
+  const { setPrefs } = useNowMode();
+  const [value, setValue] = useState<Nudges>(prefs.nudgeDefaults ?? DEFAULT_NUDGES);
+  const rows = [
+    ["day", "nudge.layer.day"],
+    ["hour", "nudge.layer.hour"],
+    ["ten", "nudge.layer.ten"],
+    ["now", "nudge.layer.now"],
+  ] as const;
+  return (
+    <form
+      className="space-y-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setPrefs({ nudgeDefaults: value });
+        onClose();
+      }}
+    >
+      <h2 className="text-lg font-bold">{t("account.nudgeTitle")}</h2>
+      <p className="text-sm leading-relaxed text-muted-foreground">{t("account.nudgeBody")}</p>
+      {rows.map(([key, label]) => (
+        <label key={key} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-3 py-3">
+          <span className="text-sm font-semibold">{t(label)}</span>
+          <Switch checked={value[key]} onCheckedChange={(on) => setValue((v) => ({ ...v, [key]: on }))} aria-label={t(label)} />
+        </label>
+      ))}
+      <SaveRow onClose={onClose} />
+    </form>
+  );
+}
+
+function FocusEditor({ prefs, onClose }: { prefs: Prefs; onClose: () => void }) {
+  const t = useT();
+  const { setPrefs } = useNowMode();
+  const [lead, setLead] = useState(String(normalizeLead(prefs.focusLeadMin)));
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <form
+      className="space-y-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!/^\d+$/.test(lead.trim())) {
+          setError(t("focus.badFormat"));
+          return;
+        }
+        const n = Number(lead);
+        if (n < 1 || n > 180) {
+          setError(t("focus.badRange"));
+          return;
+        }
+        setPrefs({ focusLeadMin: n });
+        onClose();
+      }}
+    >
+      <h2 className="text-lg font-bold">{t("account.focusTitle")}</h2>
+      <p className="text-sm leading-relaxed text-muted-foreground">{t("account.focusBody")}</p>
+      <label className="block text-xs font-semibold">
+        {t("account.leadLabel")}
+        <input
+          inputMode="numeric"
+          value={lead}
+          onChange={(e) => {
+            setLead(e.target.value);
+            setError(null);
+          }}
+          className="mt-1 h-11 w-full rounded-xl border border-border2 bg-card px-3 text-sm focus:border-blue focus:outline-none"
+        />
+      </label>
+      {error && <p role="alert" className="text-xs text-coral">{error}</p>}
+      <SaveRow onClose={onClose} />
+    </form>
+  );
+}
+
+function QuietEditor({ prefs, onClose }: { prefs: Prefs; onClose: () => void }) {
+  const t = useT();
+  const { setPrefs } = useNowMode();
+  const [start, setStart] = useState(prefs.quietStart ?? DEFAULT_QUIET_START);
+  const [end, setEnd] = useState(prefs.quietEnd ?? DEFAULT_QUIET_END);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <form
+      className="space-y-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const problem = quietRangeError(start, end);
+        if (problem === "equal") {
+          setError(t("account.equal"));
+          return;
+        }
+        if (problem) {
+          setError(t("validate.time"));
+          return;
+        }
+        setPrefs({ quietStart: start, quietEnd: end });
+        onClose();
+      }}
+    >
+      <h2 className="text-lg font-bold">{t("account.quietTitle")}</h2>
+      <p className="text-sm leading-relaxed text-muted-foreground">{t("account.quietBody")}</p>
+      <div className="grid grid-cols-2 gap-3">
+        <label className="block text-xs font-semibold">
+          {t("account.from")}
+          <input type="time" value={start} onChange={(e) => { setStart(e.target.value); setError(null); }} className="mt-1 h-11 w-full rounded-xl border border-border2 bg-card px-3 text-sm" />
+        </label>
+        <label className="block text-xs font-semibold">
+          {t("account.to")}
+          <input type="time" value={end} onChange={(e) => { setEnd(e.target.value); setError(null); }} className="mt-1 h-11 w-full rounded-xl border border-border2 bg-card px-3 text-sm" />
+        </label>
+      </div>
+      {error && <p role="alert" className="text-xs text-coral">{error}</p>}
+      <SaveRow onClose={onClose} />
+    </form>
+  );
+}
+
+function ThemeEditor({
+  prefs,
+  onClose,
+  snapshot,
+}: {
+  prefs: Prefs;
+  onClose: () => void;
+  snapshot: { themeMode: ThemeMode; palette: PaletteId };
+}) {
+  const t = useT();
+  const { setPrefs } = useNowMode();
+  const mode = normalizeTheme(prefs.themeMode);
+  const palette = normalizePalette(prefs.palette);
+  const palettes: { id: PaletteId; label: string; hint: string }[] = [
+    { id: "ocean", label: t("account.ocean"), hint: t("account.oceanHint") },
+    { id: "lavender", label: t("account.lavender"), hint: t("account.lavenderHint") },
+    { id: "forest", label: t("account.forest"), hint: t("account.forestHint") },
+  ];
+  return (
+    <div className="space-y-3">
+      <h2 className="text-lg font-bold">{t("account.themeTitle")}</h2>
+      <p className="text-xs font-semibold">{t("account.mode")}</p>
+      <div className="grid grid-cols-2 gap-2">
+        {(["light", "dark"] as const).map((item) => (
+          <button
+            key={item}
+            type="button"
+            aria-pressed={mode === item}
+            onClick={() => setPrefs({ themeMode: item })}
+            className={`h-11 rounded-xl border text-sm font-semibold ${mode === item ? "border-blue bg-blue/15 text-blue" : "border-border2 bg-card"}`}
+          >
+            {item === "light" ? t("account.light") : t("account.dark")}
+          </button>
+        ))}
+      </div>
+      <p className="text-xs font-semibold">{t("account.palette")}</p>
+      <div className="space-y-2">
+        {palettes.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            aria-pressed={palette === item.id}
+            onClick={() => setPrefs({ palette: item.id })}
+            className={`flex w-full items-center justify-between rounded-xl border px-3 py-3 text-left ${palette === item.id ? "border-blue bg-blue/10" : "border-border2 bg-card"}`}
+          >
+            <span className="text-sm font-semibold">{item.label}</span>
+            <span className="text-xs text-dim">{item.hint}</span>
+          </button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-3 pt-1">
+        <Button
+          type="button"
+          variant="secondary"
+          className="h-12 rounded-xl"
+          onClick={() => {
+            setPrefs(snapshot);
+            onClose();
+          }}
+        >
+          {t("common.cancel")}
+        </Button>
+        <Button type="button" className="h-12 rounded-xl" onClick={onClose}>
+          {t("common.save")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function SaveRow({ onClose }: { onClose: () => void }) {
+  const t = useT();
+  return (
+    <div className="grid grid-cols-2 gap-3 pt-1">
+      <Button type="button" variant="secondary" className="h-12 rounded-xl" onClick={onClose}>
+        {t("common.cancel")}
+      </Button>
+      <Button type="submit" className="h-12 rounded-xl">
+        {t("common.save")}
+      </Button>
     </div>
   );
 }

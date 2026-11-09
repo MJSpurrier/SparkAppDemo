@@ -2,13 +2,15 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
+import { localizedTag, useLocale, useT } from "@/lib/i18n/context";
+import { formatLocaleDate, formatLocaleTime, weekdayNarrows } from "@/lib/i18n/format";
 import { barColor } from "@/components/nowmode/colors";
 import { Loading } from "@/components/nowmode/Loading";
 import { IconButton, MenuButton } from "@/components/nowmode/ScreenHeader";
 import { TypeBadge } from "@/components/nowmode/ScheduleTypeField";
 import { useUI } from "@/components/nowmode/ui-context";
 import { unlockAlarm } from "@/lib/nowmode/alarm";
-import { countByDate, eventsOn, formatTime, toDateKey } from "@/lib/nowmode/logic";
+import { countByDate, eventsOn, toDateKey } from "@/lib/nowmode/logic";
 import { focusSwitchGate, planBlockTimer, scheduleOf } from "@/lib/nowmode/schedule";
 import { useNowMode } from "@/lib/nowmode/store";
 import type { NowEvent } from "@/lib/nowmode/types";
@@ -28,9 +30,9 @@ export const Route = createFileRoute("/calendar")({
   component: CalendarScreen,
 });
 
-const WEEK = ["S", "M", "T", "W", "T", "F", "S"];
-
 function CalendarScreen() {
+  const t = useT();
+  const locale = useLocale();
   const { ready, state } = useNowMode();
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
@@ -44,7 +46,8 @@ function CalendarScreen() {
   const lead = first.getDay();
   const counts = countByDate(state.events);
   const todayKey = toDateKey(now);
-  const title = first.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  const title = formatLocaleDate(first, locale, { month: "long", year: "numeric" });
+  const week = weekdayNarrows(locale);
 
   return (
     <div className="pb-8">
@@ -52,10 +55,10 @@ function CalendarScreen() {
         <MenuButton />
         <h1 className="truncate text-[22px] font-bold tracking-tight">{title}</h1>
         <div className="flex gap-2">
-          <IconButton label="Previous month" onClick={() => setOffset((o) => o - 1)}>
+          <IconButton label={t("cal.prev")} onClick={() => setOffset((o) => o - 1)}>
             <ChevronLeft className="size-4" />
           </IconButton>
-          <IconButton label="Next month" onClick={() => setOffset((o) => o + 1)}>
+          <IconButton label={t("cal.next")} onClick={() => setOffset((o) => o + 1)}>
             <ChevronRight className="size-4" />
           </IconButton>
         </div>
@@ -63,7 +66,7 @@ function CalendarScreen() {
 
       <div className="px-4">
         <div className="mb-2 grid grid-cols-7 gap-1.5 text-center text-[11px] font-semibold text-dim">
-          {WEEK.map((d, i) => (
+          {week.map((d, i) => (
             <span key={i}>{d}</span>
           ))}
         </div>
@@ -81,7 +84,7 @@ function CalendarScreen() {
                 key={key}
                 type="button"
                 onClick={() => setSelected(key)}
-                aria-label={`${day}, ${count} ${count === 1 ? "event" : "events"}`}
+                aria-label={`${day}, ${t(count === 1 ? "cal.one" : "cal.many", { n: count })}`}
                 className={cn(
                   "flex h-[58px] flex-col items-center rounded-xl border pt-1.5 transition-colors hover:bg-card2",
                   isToday ? "border-blue bg-card text-blue" : "border-border2 bg-card text-foreground",
@@ -106,7 +109,7 @@ function CalendarScreen() {
           })}
         </div>
         <p className="mt-5 text-center text-xs text-dim">
-          Tap a day · badges show <span className="font-semibold text-muted-foreground">how many events</span>
+          {t("cal.tap")}
         </p>
       </div>
     </div>
@@ -114,8 +117,10 @@ function CalendarScreen() {
 }
 
 function DayList({ dateKey, onBack }: { dateKey: string; onBack: () => void }) {
+  const t = useT();
+  const locale = useLocale();
   const { state, toggleDone, startLinkedTimer, resumeFocus } = useNowMode();
-  const { openSchedule, askTimer } = useUI();
+  const { openSchedule, openSteps, askTimer } = useUI();
   const navigate = useNavigate();
   const [y = 2026, m = 1, d = 1] = dateKey.split("-").map(Number);
   const date = new Date(y, m - 1, d);
@@ -144,22 +149,22 @@ function DayList({ dateKey, onBack }: { dateKey: string; onBack: () => void }) {
   return (
     <div className="pb-8">
       <header className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-5 pb-4 pt-5">
-        <IconButton label="Back to month" onClick={onBack}>
+        <IconButton label={t("cal.back")} onClick={onBack}>
           <ChevronLeft className="size-5" />
         </IconButton>
         <div className="min-w-0">
           <p className="truncate text-xs text-muted-foreground">
-            {list.length} {list.length === 1 ? "event" : "events"}
+            {t(list.length === 1 ? "cal.one" : "cal.many", { n: list.length })}
           </p>
           <h1 className="truncate text-[22px] font-bold tracking-tight">
-            {date.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+            {formatLocaleDate(date, locale, { weekday: "long", month: "short", day: "numeric" })}
           </h1>
         </div>
       </header>
       <ol className="space-y-2.5 px-5">
         {list.length === 0 && (
           <li className="rounded-2xl border border-border bg-bg2 px-4 py-6 text-center text-sm text-muted-foreground">
-            Nothing planned. Open space is allowed.
+            {t("cal.empty")}
           </li>
         )}
         {list.map((ev) => {
@@ -169,7 +174,7 @@ function DayList({ dateKey, onBack }: { dateKey: string; onBack: () => void }) {
             <li key={ev.id} className="rounded-2xl border border-border bg-card px-3 py-3">
               <div className="flex items-center gap-3">
                 <span className="w-16 shrink-0 text-xs font-semibold tabular-nums text-muted-foreground">
-                  {formatTime(ev.time)}
+                  {formatLocaleTime(ev.time, locale)}
                 </span>
                 <span className={cn("h-8 w-1 shrink-0 rounded-full", barColor[ev.color], ev.done && "opacity-40")} />
                 <div className="min-w-0 flex-1">
@@ -178,12 +183,12 @@ function DayList({ dateKey, onBack }: { dateKey: string; onBack: () => void }) {
                     <TypeBadge schedule={ev.schedule} />
                   </p>
                   <p className="text-xs text-dim">
-                    {ev.tag} · {ev.duration} min
+                    {localizedTag(locale, ev.tag)} · {ev.duration} min
                   </p>
                 </div>
                 <button
                   type="button"
-                  aria-label={ev.done ? `Mark ${ev.title} not done` : `Mark ${ev.title} done`}
+                  aria-label={ev.done ? t("today.markNotAria", { title: ev.title }) : t("today.markDoneAria", { title: ev.title })}
                   onClick={() => toggleDone(ev.id)}
                   className={cn(
                     "grid size-8 shrink-0 place-items-center rounded-full border",
@@ -200,16 +205,23 @@ function DayList({ dateKey, onBack }: { dateKey: string; onBack: () => void }) {
                     onClick={() => openTimer(ev)}
                     className="rounded-lg border border-border2 px-2.5 py-1 text-xs font-semibold text-muted-foreground"
                   >
-                      {timerOpen ? "Open timer" : planBlockTimer(ev, new Date()).ended ? "Add time" : "Timer"}
+                      {timerOpen ? t("today.openTimer") : planBlockTimer(ev, new Date()).ended ? t("today.addTime") : t("today.startTimer")}
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => openSteps(ev.id)}
+                  className="rounded-lg border border-border2 px-2.5 py-1 text-xs font-semibold text-muted-foreground"
+                >
+                  {t("today.split")}
+                </button>
                 {flexible && (
                   <button
                     type="button"
                     onClick={() => openSchedule(ev.id)}
                     className="rounded-lg border border-border2 px-2.5 py-1 text-xs font-semibold text-muted-foreground"
                   >
-                    Edit time
+                    {t("today.editTime")}
                   </button>
                 )}
                 {!flexible && (
@@ -218,7 +230,7 @@ function DayList({ dateKey, onBack }: { dateKey: string; onBack: () => void }) {
                     onClick={() => openSchedule(ev.id)}
                     className="rounded-lg border border-border2 px-2.5 py-1 text-xs font-semibold text-foreground"
                   >
-                    Reschedule
+                      {t("today.reschedule")}
                   </button>
                 )}
               </div>

@@ -19,6 +19,9 @@ interface UIState {
   timerRequest: TimerRequest;
   askTimer: (req: Exclude<TimerRequest, null>) => void;
   closeTimerRequest: () => void;
+  stepsEventId: string | null;
+  openSteps: (id: string) => void;
+  closeSteps: () => void;
 }
 
 const UICtx = createContext<UIState | null>(null);
@@ -30,6 +33,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
   const [sheetTab, setSheetTab] = useState<SheetTab>("menu");
   const [scheduleEventId, setScheduleEventId] = useState<string | null>(null);
   const [timerRequest, setTimerRequest] = useState<TimerRequest>(null);
+  const [stepsEventId, setStepsEventId] = useState<string | null>(null);
 
   const value = useMemo<UIState>(
     () => ({
@@ -51,8 +55,11 @@ export function UIProvider({ children }: { children: ReactNode }) {
       timerRequest,
       askTimer: (req) => setTimerRequest(req),
       closeTimerRequest: () => setTimerRequest(null),
+      stepsEventId,
+      openSteps: (id: string) => setStepsEventId(id),
+      closeSteps: () => setStepsEventId(null),
     }),
-    [drawerOpen, sheetOpen, sheetMode, sheetTab, scheduleEventId, timerRequest],
+    [drawerOpen, sheetOpen, sheetMode, sheetTab, scheduleEventId, timerRequest, stepsEventId],
   );
 
   return <UICtx.Provider value={value}>{children}</UICtx.Provider>;

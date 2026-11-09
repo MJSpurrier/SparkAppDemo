@@ -2,6 +2,7 @@ import { useRouter } from "@tanstack/react-router";
 import { ChevronLeft, Menu } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { useT } from "@/lib/i18n/context";
 import { useUI } from "./ui-context";
 
 export function IconButton({
@@ -26,19 +27,21 @@ export function IconButton({
 }
 
 export function MenuButton() {
+  const t = useT();
   const { setDrawerOpen } = useUI();
   return (
-    <IconButton label="Open menu" onClick={() => setDrawerOpen(true)}>
+    <IconButton label={t("nav.menu")} onClick={() => setDrawerOpen(true)}>
       <Menu className="size-5" strokeWidth={1.8} />
     </IconButton>
   );
 }
 
 export function BackButton() {
+  const t = useT();
   const router = useRouter();
   return (
     <IconButton
-      label="Back"
+      label={t("nav.back")}
       onClick={() => {
         if (window.history.length > 1) router.history.back();
         else router.navigate({ to: "/" });

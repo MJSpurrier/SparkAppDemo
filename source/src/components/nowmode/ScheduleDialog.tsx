@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { formatTime } from "@/lib/nowmode/logic";
+import { explainScheduleError, useLocale, useT } from "@/lib/i18n/context";
+import { formatLocaleTime } from "@/lib/i18n/format";
 import {
-  conflictMessage,
   eventEndClock,
   eventStartMs,
   fixedConflict,
@@ -27,6 +27,8 @@ export function ScheduleDialog() {
 }
 
 function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => void }) {
+  const t = useT();
+  const locale = useLocale();
   const { state, commitSchedule } = useNowMode();
   const ev = state.events.find((e) => e.id === eventId);
   const [date, setDate] = useState(ev?.date ?? "");
@@ -57,17 +59,17 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
   if (!ev) return null;
 
   const fixed = schedule === "fixed";
-  const title = fixed ? "Reschedule" : "Edit time";
-  const endLabel = valid.ok ? formatTime(eventEndClock({ date, time, duration: parsedDuration })) : null;
+  const title = fixed ? t("schedule.move") : t("schedule.edit");
+  const endLabel = valid.ok ? formatLocaleTime(eventEndClock({ date, time, duration: parsedDuration }), locale) : null;
 
   const save = () => {
     if (!valid.ok) {
-      setError(valid.message);
+      setError(explainScheduleError(locale, valid));
       return;
     }
     const result = commitSchedule(ev.id, { date, time, duration: parsedDuration, schedule });
     if (!result.ok) {
-      setError(result.message);
+      setError(explainScheduleError(locale, result));
       return;
     }
     onClose();
@@ -75,7 +77,7 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
 
   return (
     <div className="absolute inset-0 z-30" role="dialog" aria-modal="true" aria-labelledby="schedule-title">
-      <button type="button" aria-label="Cancel" onClick={onClose} className="absolute inset-0 bg-ink/70 backdrop-blur-[2px]" />
+      <button type="button" aria-label={t("common.cancel")} onClick={onClose} className="absolute inset-0 bg-ink/70 backdrop-blur-[2px]" />
       <div className="animate-sheet-up absolute inset-x-0 bottom-0 max-h-[92%] overflow-y-auto rounded-t-3xl border-x border-t border-border2 bg-bg2 px-5 pb-6 pt-3 shadow-shell">
         <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-border2" />
         <h2 id="schedule-title" className="text-lg font-bold">
@@ -83,7 +85,7 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">{ev.title}</p>
         <p className="mt-1 text-xs leading-relaxed text-dim">
-          This only moves it inside Now Mode. It does not change a calendar invite or tell anyone else.
+          {t("schedule.local")}
         </p>
 
         <form
@@ -96,7 +98,7 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
           <ScheduleTypeField value={schedule} onChange={setSchedule} name={`schedule-${ev.id}`} />
 
           <label className="block text-xs font-semibold">
-            Date
+            {t("schedule.date")}
             <input
               type="date"
               required
@@ -110,7 +112,7 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-xs font-semibold">
-              Starts
+              {t("schedule.starts")}
               <input
                 type="time"
                 required
@@ -123,7 +125,7 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
               />
             </label>
             <label className="block text-xs font-semibold">
-              Minutes
+              {t("schedule.minutes")}
               <input
                 inputMode="numeric"
                 value={duration}
@@ -137,12 +139,12 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
             </label>
           </div>
           <p id="duration-hint" className="text-xs text-muted-foreground">
-            {endLabel ? `Ends at ${endLabel}.` : "Enter a whole number of minutes that finishes the same day."}
+            {endLabel ? t("schedule.ends", { time: endLabel }) : t("schedule.sameDay")}
           </p>
 
           {conflict && (
             <p role="alert" className="rounded-xl border border-coral/40 bg-coral/10 px-3 py-2 text-xs leading-relaxed text-foreground">
-              {conflictMessage(conflict)} You can still save this on purpose.
+              {t("conflict.overlap", { title: conflict.title, time: formatLocaleTime(conflict.time, locale) })}
             </p>
           )}
           {error && (
@@ -153,10 +155,10 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
 
           <div className="grid grid-cols-2 gap-3 pt-1">
             <Button type="button" variant="secondary" size="lg" className="h-12 rounded-xl" onClick={onClose}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button type="submit" size="lg" className="h-12 rounded-xl text-[15px] font-semibold">
-              {conflict ? "Save anyway" : "Save"}
+              {conflict ? t("schedule.anyway") : t("common.save")}
             </Button>
           </div>
         </form>
