@@ -89,7 +89,7 @@
   --cream: oklch(0.959 0.01 87.5);
   --ink: oklch(0.188 0.013 248.5);
   --muted-foreground: oklch(0.748 0.037 247);
-  --dim: oklch(0.604 0.041 247.3);
+  --dim: oklch(0.66 0.04 247);
   --blue: oklch(0.69 0.149 256.9);
   --teal: oklch(0.776 0.112 188.5);
   --green: oklch(0.818 0.121 156.3);
@@ -150,6 +150,10 @@
   --border: oklch(0.86 0.02 250);
   --border2: oklch(0.8 0.03 250);
   --foreground: oklch(0.28 0.03 255);
+  --blue: oklch(0.48 0.14 257);
+  --teal: oklch(0.48 0.1 188);
+  --green: oklch(0.48 0.12 156);
+  --coral: oklch(0.5 0.13 48);
   --cream: oklch(0.99 0.005 95);
   --ink: oklch(0.22 0.03 255);
   --muted-foreground: oklch(0.42 0.03 255);

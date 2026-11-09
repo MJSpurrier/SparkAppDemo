@@ -41,21 +41,22 @@ export interface SlotInput {
 }
 
 export function validateSlot(input: SlotInput): { ok: true } | { ok: false; message: string } {
-  if (!DATE_RE.test(input.date)) return { ok: false, message: "Choose a real date." };
+  if (!DATE_RE.test(input.date)) return { ok: false, code: "date" as const, message: "Choose a real date." };
   const [y, m, d] = input.date.split("-").map(Number);
   const dt = new Date(y!, (m ?? 1) - 1, d);
   if (dt.getFullYear() !== y || dt.getMonth() !== (m ?? 1) - 1 || dt.getDate() !== d) {
-    return { ok: false, message: "Choose a real date." };
+    return { ok: false, code: "date" as const, message: "Choose a real date." };
   }
-  if (!TIME_RE.test(input.time.trim())) return { ok: false, message: "Use a start time like 14:00." };
+  if (!TIME_RE.test(input.time.trim())) return { ok: false, code: "time" as const, message: "Use a start time like 14:00." };
   if (!Number.isInteger(input.duration) || input.duration < 1 || input.duration > MAX_BLOCK_MINUTES) {
-    return { ok: false, message: "Duration needs to be a whole number of minutes, from 1 to 720." };
+    return { ok: false, code: "minutes" as const, message: "Duration needs to be a whole number of minutes, from 1 to 720." };
   }
   const start = eventDate({ date: input.date, time: input.time });
   const end = new Date(start.getTime() + input.duration * 60_000);
   if (toDateKey(end) !== input.date) {
     return {
       ok: false,
+      code: "midnight" as const,
       message: "That runs past midnight. Shorten it so it finishes the same day, or start it earlier.",
     };
   }
@@ -65,11 +66,11 @@ export function validateSlot(input: SlotInput): { ok: true } | { ok: false; mess
 export function parseMinutesInput(raw: string): { ok: true; minutes: number } | { ok: false; message: string } {
   const trimmed = raw.trim();
   if (!/^\d+$/.test(trimmed)) {
-    return { ok: false, message: "Enter a whole number of minutes, like 10." };
+    return { ok: false, code: "format" as const, message: "Enter a whole number of minutes, like 10." };
   }
   const minutes = Number(trimmed);
   if (minutes < 1 || minutes > MAX_BLOCK_MINUTES) {
-    return { ok: false, message: "Enter between 1 and 720 minutes." };
+    return { ok: false, code: "range" as const, message: "Enter between 1 and 720 minutes." };
   }
   return { ok: true, minutes };
 }
@@ -90,7 +91,7 @@ export function planExtension(
   now: Date,
 ): { ok: true; plan: ExtensionPlan } | { ok: false; message: string } {
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > MAX_BLOCK_MINUTES) {
-    return { ok: false, message: "Enter a whole number of minutes, from 1 to 720." };
+    return { ok: false, code: "minutes" as const, message: "Enter a whole number of minutes, from 1 to 720." };
   }
   const start = eventDate(ev);
   const scheduledEnd = eventEndMs(ev);
@@ -103,17 +104,20 @@ export function planExtension(
     if (maxMin < 1) {
       return {
         ok: false,
+        code: "late" as const,
         message: "This block is already at the end of the day. Reschedule it if you want time tomorrow.",
       };
     }
     return {
       ok: false,
+      code: "upTo" as const,
+      maxMin,
       message: `That runs past midnight. You can add up to ${maxMin} minutes and still finish today.`,
     };
   }
   const duration = Math.round((end.getTime() - start.getTime()) / 60_000);
   if (duration < 1 || duration > MAX_BLOCK_MINUTES) {
-    return { ok: false, message: "That would make the block longer than 12 hours." };
+    return { ok: false, code: "long" as const, message: "That would make the block longer than 12 hours." };
   }
   return { ok: true, plan: { duration, endMs: end.getTime() } };
 }

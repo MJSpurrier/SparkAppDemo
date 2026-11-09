@@ -25,7 +25,47 @@ export function useT() {
   return (key: MessageKey, vars?: Record<string, string | number>) => translate(locale, key, vars);
 }
 
+export function explainScheduleError(
+  locale: LocaleId,
+  err: { message: string; code?: string; maxMin?: number },
+): string {
+  if (err.code === "upTo" && typeof err.maxMin === "number") return translate(locale, "validate.upTo", { n: err.maxMin });
+  const map = {
+    date: "validate.date",
+    time: "validate.time",
+    minutes: "validate.minutes",
+    midnight: "validate.midnight",
+    format: "focus.badFormat",
+    range: "validate.minutes",
+    late: "validate.late",
+    long: "validate.long",
+  } as const;
+  if (err.code && err.code in map) return translate(locale, map[err.code as keyof typeof map]);
+  return err.message;
+}
+
 export function resolvedLocale(saved: string | undefined, browserLanguage: string | undefined): LocaleId {
   if (saved === "en" || saved === "es-419" || saved === "es-ES") return saved;
   return detectLocale(browserLanguage);
+}
+
+/** Locale for chrome that renders outside the provider, such as the error screen. */
+export function activeLocale(): LocaleId {
+  let saved: string | undefined;
+  try {
+    if (typeof localStorage !== "undefined") {
+      const raw = localStorage.getItem("nowmode-v1");
+      const value = raw ? JSON.parse(raw)?.prefs?.locale : undefined;
+      if (typeof value === "string") saved = value;
+    }
+  } catch {
+    saved = undefined;
+  }
+  const language = typeof navigator === "undefined" ? undefined : navigator.language;
+  return resolvedLocale(saved, language);
+}
+
+/** System tag stays in storage. Only the default word is shown in the active language. */
+export function localizedTag(locale: LocaleId, tag: string): string {
+  return tag === "Capture" ? translate(locale, "capture.tag") : tag;
 }

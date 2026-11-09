@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { detectLocale } from "@/lib/i18n/locale";
 import { translate } from "@/lib/i18n/context";
+import { en, messages, type MessageKey } from "@/lib/i18n/messages";
 import { migrateAppState, migrateWin } from "@/lib/nowmode/schedule";
 import {
   isQuietAt,
@@ -12,6 +13,32 @@ import {
 } from "@/lib/nowmode/settings";
 import { toggleStep } from "@/lib/nowmode/logic";
 import type { NowEvent } from "@/lib/nowmode/types";
+
+describe("dictionary coverage", () => {
+  const keys = Object.keys(en) as MessageKey[];
+  it("has every English key in both Spanish variants, with no empty strings", () => {
+    for (const locale of ["es-419", "es-ES"] as const) {
+      for (const key of keys) {
+        expect(messages[locale][key], `${locale} ${key}`).toBeTruthy();
+      }
+      expect(Object.keys(messages[locale]).sort()).toEqual([...keys].sort());
+    }
+  });
+  it("keeps staged-reminder copy plain and regionally distinct", () => {
+    expect(messages["es-419"]["account.nudges"]).toBe("Recordatorios por etapas");
+    expect(messages["es-419"]["account.nudgesHint"]).toBe("Elige cuándo recibir avisos");
+    expect(messages["es-ES"]["account.nudgesHint"]).toBe("Elige cuándo recibir los recordatorios");
+    expect(messages["es-419"]["board.zoom"]).toBe("Ampliar");
+    expect(messages["es-ES"]["board.connect"]).toBe("Enlazar");
+    expect(messages["es-419"]["board.connect"]).toBe("Conectar");
+    for (const locale of ["es-419", "es-ES"] as const) {
+      const blob = Object.values(messages[locale]).join("\n");
+      expect(blob).not.toMatch(/vistazo|jalón|tirón/i);
+    }
+    expect(messages["es-419"]["today.addTime"]).not.toBe(messages["es-ES"]["today.addTime"]);
+    expect(messages["es-419"]["nav.focus"]).not.toBe(messages["es-ES"]["nav.focus"]);
+  });
+});
 
 describe("locale fallback", () => {
   it("keeps Spain and Latin America apart and falls back to English", () => {

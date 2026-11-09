@@ -20,11 +20,11 @@ export const Route = createFileRoute("/mission")({
 });
 
 const beliefs = [
-  { icon: Zap, title: "Interest is fuel", body: "Your brain runs on curiosity and urgency. We work with that, not against it.", tone: "text-coral" },
-  { icon: Compass, title: "One thing is enough", body: "You don't need the whole map. Just the next step, right now.", tone: "text-blue" },
-  { icon: Feather, title: "No shame, ever", body: "No streaks to break, no red badges. Missed things just move gently.", tone: "text-teal" },
-  { icon: HeartHandshake, title: "Rest is part of it", body: "When the list is clear, you're allowed to stop. That's the point.", tone: "text-green" },
-];
+  { icon: Zap, title: "mission.b1t", body: "mission.b1b", tone: "text-coral" },
+  { icon: Compass, title: "mission.b2t", body: "mission.b2b", tone: "text-blue" },
+  { icon: Feather, title: "mission.b3t", body: "mission.b3b", tone: "text-teal" },
+  { icon: HeartHandshake, title: "mission.b4t", body: "mission.b4b", tone: "text-green" },
+] as const;
 
 function Mission() {
   const t = useT();
@@ -35,11 +35,9 @@ function Mission() {
         <section className="rounded-[20px] border border-border2 bg-hero p-6">
           <Logo size={44} />
           <h2 className="mt-4 text-[28px] font-bold leading-[1.1] tracking-tight">
-            ADHD is a superpower, <span className="text-blue">not a fault.</span>
+            {t("mission.headline")} <span className="text-blue">{t("mission.em")}</span>
           </h2>
-          <p className="mt-3 text-sm text-muted-foreground">
-            Now Mode is a planner built for brains that live in the present tense.
-          </p>
+          <p className="mt-3 text-sm text-muted-foreground">{t("mission.sub")}</p>
         </section>
 
         <ul className="grid gap-3">
@@ -49,8 +47,8 @@ function Mission() {
                 <Icon className={`size-4 ${tone}`} />
               </span>
               <span>
-                <span className="block text-sm font-semibold">{title}</span>
-                <span className="mt-0.5 block text-sm text-muted-foreground">{body}</span>
+                <span className="block text-sm font-semibold">{t(title)}</span>
+                <span className="mt-0.5 block text-sm text-muted-foreground">{t(body)}</span>
               </span>
             </li>
           ))}
@@ -58,11 +56,9 @@ function Mission() {
 
         <figure className="rounded-2xl border border-border bg-bg2 p-5">
           <blockquote className="text-sm leading-relaxed text-foreground/90">
-            “I spent years trying to plan like everyone else and feeling broken when it didn't stick. Now Mode
-            is the tool I wished I had: it only ever asks what's next, and it always tells me when I'm allowed to
-            rest.”
+            {t("mission.quote")}
           </blockquote>
-          <figcaption className="mt-3 text-xs text-dim">— The founder of Now Mode</figcaption>
+          <figcaption className="mt-3 text-xs text-dim">{t("mission.by")}</figcaption>
         </figure>
       </div>
     </div>

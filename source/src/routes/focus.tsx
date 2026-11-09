@@ -7,10 +7,11 @@ import { Ring } from "@/components/nowmode/Ring";
 import { MenuButton } from "@/components/nowmode/ScreenHeader";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { useT } from "@/lib/i18n/context";
+import { useLocale, useT } from "@/lib/i18n/context";
+import { formatLocaleTime } from "@/lib/i18n/format";
 import { alarmCanPlay, playBlockChime, unlockAlarm } from "@/lib/nowmode/alarm";
 import { parseCustomDuration, splitCustomMinutes } from "@/lib/nowmode/settings";
-import { formatClock, formatMMSS, formatTime } from "@/lib/nowmode/logic";
+import { formatMMSS } from "@/lib/nowmode/logic";
 import { eventEndClock, parseMinutesInput, scheduleOf } from "@/lib/nowmode/schedule";
 import { FOCUS_PRESETS, useNow, useNowMode, type ExtendResult } from "@/lib/nowmode/store";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,12 @@ export const Route = createFileRoute("/focus")({
 });
 
 const QUICK = [5, 10, 15, 30];
+const PRESET_KEYS = {
+  meditate: "focus.preset.meditate",
+  study: "focus.preset.study",
+  clean: "focus.preset.clean",
+  custom: "focus.preset.custom",
+} as const;
 
 function FocusScreen() {
   const {
@@ -51,6 +58,7 @@ function FocusScreen() {
     releaseLinked,
   } = useNowMode();
   const t = useT();
+  const locale = useLocale();
   const now = useNow(1000);
   const [confirmRelease, setConfirmRelease] = useState(false);
   const [customError, setCustomError] = useState<string | null>(null);
@@ -61,7 +69,9 @@ function FocusScreen() {
   const linked = !!linkedEvent && scheduleOf(linkedEvent) === "flexible";
   const paused = !f.running && f.remainingSec < f.totalSec && !f.finished && !f.endPromptFor;
   const endsAt = f.running && f.endsAt ? new Date(f.endsAt) : new Date(now.getTime() + f.remainingSec * 1000);
-  const endLabel = linked && linkedEvent ? formatTime(eventEndClock(linkedEvent)) : formatClock(endsAt);
+  const endLabel = linked && linkedEvent
+    ? formatLocaleTime(eventEndClock(linkedEvent), locale)
+    : formatLocaleTime(`${endsAt.getHours()}:${endsAt.getMinutes()}`, locale);
 
   const begin = () => {
     unlockAlarm();
@@ -97,7 +107,7 @@ function FocusScreen() {
                   active ? "border-blue/60 bg-blue/15 text-blue" : "border-border2 bg-card text-muted-foreground",
                 )}
               >
-                {p.label} {p.id === "custom" ? f.customMin : p.minutes}
+                {t(PRESET_KEYS[p.id])} {p.id === "custom" ? f.customMin : p.minutes}
               </button>
             );
           })}
@@ -107,7 +117,7 @@ function FocusScreen() {
       {linked && linkedEvent && (
         <div className="px-5 text-center">
           <p className="text-xs text-muted-foreground">
-            {formatTime(linkedEvent.time)} – {formatTime(eventEndClock(linkedEvent))}
+            {formatLocaleTime(linkedEvent.time, locale)} – {formatLocaleTime(eventEndClock(linkedEvent), locale)}
           </p>
           <p className="mt-1 text-xs leading-relaxed text-dim">
             {t("focus.blockNote")}
@@ -141,7 +151,11 @@ function FocusScreen() {
 
       <div className="mt-5 text-center">
         <p className="text-sm text-muted-foreground">{t("focus.amplifying")}</p>
-        <h1 className="mt-1 px-6 text-[22px] font-bold leading-tight">{f.label || t("focus.fallback")}</h1>
+        <h1 className="mt-1 px-6 text-[22px] font-bold leading-tight">
+          {linked || !PRESET_KEYS[f.presetId as keyof typeof PRESET_KEYS]
+            ? f.label || t("focus.fallback")
+            : t(PRESET_KEYS[f.presetId as keyof typeof PRESET_KEYS])}
+        </h1>
       </div>
 
       <div className="relative mx-auto mt-6 grid place-items-center">
@@ -152,7 +166,7 @@ function FocusScreen() {
           <div className="text-center">
             <p className="text-[46px] font-bold tabular-nums leading-none tracking-tight">{formatMMSS(f.remainingSec)}</p>
             <p className="mt-2 text-xs text-muted-foreground">
-              {linked ? t("focus.ends", { time: endLabel }) : t("focus.then", { time: formatClock(endsAt) })}
+              {linked ? t("focus.ends", { time: endLabel }) : t("focus.then", { time: endLabel })}
             </p>
           </div>
         </Ring>

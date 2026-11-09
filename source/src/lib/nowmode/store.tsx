@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
-import { translate } from "@/lib/i18n/context";
+import { explainScheduleError, translate } from "@/lib/i18n/context";
 import { formatLocaleTime } from "@/lib/i18n/format";
 import { resolvedLocale } from "@/lib/i18n/context";
 import { playBlockChime } from "./alarm";
@@ -188,7 +188,8 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch {
-      toast("Storage is full", { description: "Try removing a photo card or two." });
+      const locale = localeOf(stateRef.current.prefs);
+      toast(translate(locale, "storage.full"), { description: translate(locale, "storage.body") });
     }
   }, [state, ready]);
 
@@ -436,7 +437,8 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
         if (!ev) return;
         const tiers = NUDGE_TIERS.filter((t) => ev.nudges[t.key]);
         if (!tiers.length) {
-          toast("No nudges on", { description: "Turn on a layer to preview it." });
+          const locale = localeOf(stateRef.current.prefs);
+          toast(translate(locale, "nudge.none"), { description: translate(locale, "nudge.noneBody") });
           return;
         }
         const locale = localeOf(stateRef.current.prefs);
@@ -652,9 +654,9 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
       startLinkedTimer: (eventId) => {
         const s = stateRef.current;
         const ev = s.events.find((e) => e.id === eventId);
-        if (!ev) return { ok: false, message: "That activity is no longer on your day." };
+        if (!ev) return { ok: false, message: translate(localeOf(stateRef.current.prefs), "timer.missing") };
         if (scheduleOf(ev) !== "flexible") {
-          return { ok: false, message: "Fixed events stay put. Start a separate focus if you want a timer." };
+          return { ok: false, message: translate(localeOf(stateRef.current.prefs), "timer.fixedSeparate") };
         }
         const plan = planBlockTimer(ev, new Date());
         setState((prev) => ({
@@ -680,14 +682,14 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
       extendLinked: (minutes, force = false) => {
         const s = stateRef.current;
         const id = s.focus.eventId;
-        if (!id || !s.focus.linkedToBlock) return { ok: false, message: "Start the activity timer first." };
+        if (!id || !s.focus.linkedToBlock) return { ok: false, message: translate(localeOf(s.prefs), "timer.needStart") };
         const ev = s.events.find((e) => e.id === id);
-        if (!ev) return { ok: false, message: "That activity is no longer on your day." };
+        if (!ev) return { ok: false, message: translate(localeOf(s.prefs), "timer.missing") };
         if (scheduleOf(ev) !== "flexible") {
-          return { ok: false, message: "Fixed events stay put. Reschedule to move one." };
+          return { ok: false, message: translate(localeOf(s.prefs), "timer.fixedStay") };
         }
         const planned = planExtension(ev, minutes, new Date());
-        if (!planned.ok) return planned;
+        if (!planned.ok) return { ok: false, message: explainScheduleError(localeOf(s.prefs), planned) };
         const hit = fixedConflict(s.events, ev.id, eventStartMs(ev), planned.plan.endMs, Date.now());
         if (hit && !force) {
           const locale = localeOf(s.prefs);
@@ -787,7 +789,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
         const check = validateSlot(input);
         if (!check.ok) return check;
         const ev = stateRef.current.events.find((e) => e.id === id);
-        if (!ev) return { ok: false, message: "That activity is no longer on your day." };
+        if (!ev) return { ok: false, message: translate(localeOf(stateRef.current.prefs), "timer.missing") };
         const next = applyReschedule(ev, input);
         const moved = slotChanged(ev, input);
         setState((prev) => {
@@ -827,7 +829,17 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
           updateFocus((x) => extendFocusState(x, 5));
           return;
         }
-        addWin(f.label || "Focus session", f.eventId ?? undefined);
+        addWin(
+          f.label ||
+            translate(
+              resolvedLocale(
+                stateRef.current.prefs.locale,
+                typeof navigator === "undefined" ? undefined : navigator.language,
+              ),
+              "focus.session",
+            ),
+          f.eventId ?? undefined,
+        );
         if (f.eventId) {
           updateEvent(f.eventId, (e) => ({ ...e, done: true }));
         }

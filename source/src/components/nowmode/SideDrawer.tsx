@@ -88,7 +88,7 @@ export function SideDrawer() {
             </button>
           </div>
 
-          <nav className="flex-1 overflow-y-auto px-2 py-4" aria-label="More">
+          <nav className="flex-1 overflow-y-auto px-2 py-4" aria-label={t("nav.more")}>
             <p className="px-2 pb-2 text-[11px] font-bold uppercase tracking-wider text-dim">{t("drawer.section")}</p>
             <ul className="space-y-1">
               {[...shortcuts, ...destinations].map(({ to, label, hint, icon: Icon }) => (

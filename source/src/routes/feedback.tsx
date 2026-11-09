@@ -32,16 +32,14 @@ function Feedback() {
     <div className="pb-10">
       <ScreenHeader back title={t("nav.feedback")} />
       <div className="space-y-4 px-5">
-        <p className="text-sm text-muted-foreground">
-          What helps? What gets in the way? Half-formed thoughts are welcome.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("feedback.intro")}</p>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={7}
-          placeholder="I wish Now Mode could…"
+          placeholder={t("feedback.ph")}
           className="w-full resize-none rounded-2xl border border-border2 bg-card px-4 py-3 text-[15px] placeholder:text-dim focus:border-blue focus:outline-none"
-          aria-label="Your feedback"
+          aria-label={t("feedback.yours")}
         />
         <div className="grid grid-cols-2 gap-3">
           <Button
@@ -52,27 +50,27 @@ function Feedback() {
             onClick={async () => {
               try {
                 await navigator.clipboard.writeText(text);
-                toast("Copied", { description: "Paste it wherever is easiest." });
+                toast(t("feedback.copied"), { description: t("feedback.copiedBody") });
               } catch {
-                toast("Couldn't copy", { description: "Select the text and copy it manually." });
+                toast(t("feedback.fail"), { description: t("feedback.failBody") });
               }
             }}
           >
-            <Copy /> Copy
+            <Copy /> {t("feedback.copy")}
           </Button>
           <Button size="lg" className="h-12 rounded-xl font-semibold" disabled={!text.trim()} asChild={!!text.trim()}>
             {text.trim() ? (
-              <a href={`mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent("Now Mode feedback")}&body=${encodeURIComponent(text)}`}>
-                <Mail /> Email it
+              <a href={`mailto:${FEEDBACK_EMAIL}?subject=${encodeURIComponent(t("feedback.subject"))}&body=${encodeURIComponent(text)}`}>
+                <Mail /> {t("feedback.email")}
               </a>
             ) : (
               <span>
-                <Mail /> Email it
+                <Mail /> {t("feedback.email")}
               </span>
             )}
           </Button>
         </div>
-        <p className="text-center text-xs text-dim">Thank you for shaping Now Mode.</p>
+        <p className="text-center text-xs text-dim">{t("feedback.thanks")}</p>
       </div>
     </div>
   );

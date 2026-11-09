@@ -34,7 +34,7 @@ export function TabBar() {
   const { sheetOpen, openSheet, closeSheet } = useUI();
   return (
     <nav
-      aria-label="Main"
+      aria-label={t("nav.main")}
       className="relative z-30 flex shrink-0 items-center border-t border-border bg-background px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2"
     >
       {left.map((t) => (

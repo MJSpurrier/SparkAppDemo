@@ -37,14 +37,11 @@ function Support() {
       <div className="space-y-5 px-5">
         <section className="rounded-[20px] border border-border2 bg-hero p-5">
           <HandHeart className="size-6 text-coral" />
-          <h2 className="mt-3 text-xl font-bold">Keep Now Mode calm & ad-free</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Support is <span className="font-semibold text-foreground">never required</span>. Every feature stays
-            usable whether you chip in or not.
-          </p>
+          <h2 className="mt-3 text-xl font-bold">{t("support.headline")}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t("support.body")}</p>
         </section>
 
-        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-border bg-bg2 p-1" role="radiogroup" aria-label="Frequency">
+        <div className="grid grid-cols-2 gap-2 rounded-2xl border border-border bg-bg2 p-1" role="radiogroup" aria-label={t("support.freq")}>
           {(["once", "monthly"] as const).map((f) => (
             <button
               key={f}
@@ -57,12 +54,12 @@ function Support() {
                 freq === f ? "bg-card2 text-foreground" : "text-dim",
               )}
             >
-              {f === "once" ? "One-time" : "Monthly"}
+              {f === "once" ? t("support.once") : t("support.monthly")}
             </button>
           ))}
         </div>
 
-        <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label="Amount">
+        <div className="grid grid-cols-4 gap-2" role="radiogroup" aria-label={t("support.amount")}>
           {PRESETS.map((p) => (
             <button
               key={p}
@@ -88,7 +85,7 @@ function Support() {
               amount === "custom" ? "border-blue/60 bg-blue/15 text-blue" : "border-border2 bg-card text-muted-foreground",
             )}
           >
-            Custom
+            {t("support.custom")}
           </button>
         </div>
         {amount === "custom" && (
@@ -99,9 +96,9 @@ function Support() {
               inputMode="decimal"
               value={custom}
               onChange={(e) => setCustom(e.target.value.replace(/[^\d.]/g, ""))}
-              placeholder="Any amount"
+              placeholder={t("support.any")}
               className="w-full bg-transparent text-base focus:outline-none"
-              aria-label="Custom amount"
+              aria-label={t("support.any")}
             />
           </label>
         )}
@@ -111,13 +108,13 @@ function Support() {
           className="h-12 w-full rounded-xl text-[15px] font-semibold"
           disabled={value <= 0}
           onClick={() =>
-            toast("Thank you — truly", { description: "Payments aren't switched on yet. Nothing was charged." })
+            toast(t("support.thanks"), { description: t("support.thanksBody") })
           }
         >
-          Support with ${value || 0}
-          {freq === "monthly" ? " / month" : ""}
+          {t("support.button", { amount: value || 0 })}
+          {freq === "monthly" ? t("support.month") : ""}
         </Button>
-        <p className="text-center text-xs text-dim">Preview only — no payment is taken.</p>
+        <p className="text-center text-xs text-dim">{t("support.preview")}</p>
       </div>
     </div>
   );

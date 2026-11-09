@@ -3,7 +3,7 @@ import { Bell, BellRing, Check, Clock3, Moon, Scissors, Sparkles, Zap } from "lu
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
-import { useLocale, useT } from "@/lib/i18n/context";
+import { localizedTag, useLocale, useT } from "@/lib/i18n/context";
 import { formatLocaleDate, formatLocaleTime } from "@/lib/i18n/format";
 import { barColor } from "@/components/nowmode/colors";
 import { Loading } from "@/components/nowmode/Loading";
@@ -16,9 +16,7 @@ import { unlockAlarm } from "@/lib/nowmode/alarm";
 import {
   NUDGE_TIERS,
   eventsOn,
-  formatClock,
   formatMMSS,
-  formatTime,
   nextUp,
   toDateKey,
 } from "@/lib/nowmode/logic";
@@ -40,8 +38,6 @@ export const Route = createFileRoute("/")({
   }),
   component: Today,
 });
-
-const energyLabel: Record<Energy, string> = { low: "Low", okay: "Okay", high: "High" };
 
 function Today() {
   const t = useT();
@@ -67,14 +63,14 @@ function Today() {
         title={allClear ? t("today.allClear") : t("today.oneThing")}
         right={
           <span className="inline-flex items-center gap-1 rounded-full border border-border2 bg-card px-3 py-1.5 text-xs font-semibold text-green">
-            <Zap className="size-3.5" /> {state.energy ? energyLabel[state.energy] : "Check in"}
+            <Zap className="size-3.5" /> {state.energy ? t(state.energy === "low" ? "today.low" : state.energy === "okay" ? "today.okay" : "today.high") : t("today.checkIn")}
           </span>
         }
       />
 
       <div className="space-y-5 px-5">
         {/* Day progress + gentle wins */}
-        <section aria-label="Day progress" className="space-y-2">
+        <section aria-label={t("a11y.day")} className="space-y-2">
           <div className="h-1.5 overflow-hidden rounded-full bg-card2">
             <div
               className="h-full rounded-full bg-teal transition-[width] duration-500"
@@ -90,7 +86,7 @@ function Today() {
         </section>
 
         {/* Energy check-in */}
-        <section aria-label="Energy check-in" className="flex items-center gap-2">
+        <section aria-label={t("today.battery")} className="flex items-center gap-2">
           <span className="mr-1 text-xs text-dim">{t("today.battery")}</span>
           {(["low", "okay", "high"] as Energy[]).map((e) => (
             <button
@@ -113,7 +109,7 @@ function Today() {
         {up ? <UpNext ev={up} now={now} /> : <AllClearCard />}
 
         {/* Rest of today */}
-        <section aria-label="Rest of today" className="space-y-2.5">
+        <section aria-label={t("today.rest")} className="space-y-2.5">
           <div className="flex items-center justify-between px-1">
             <h2 className="text-sm font-semibold">{t("today.rest")}</h2>
             <span className="text-sm text-dim">{t("today.left", { n: left })}</span>
@@ -303,14 +299,14 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
       : 1;
 
   return (
-    <section aria-label="Up next" className="rounded-[20px] border border-border2 bg-hero p-5 shadow-card">
+    <section aria-label={t("today.upNext")} className="rounded-[20px] border border-border2 bg-hero p-5 shadow-card">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-blue">{t("today.upNext")}</p>
         <TypeBadge schedule={ev.schedule} />
       </div>
       <h2 className="mt-1 text-[22px] font-bold leading-tight">{ev.title}</h2>
       <p className="mt-0.5 text-sm text-muted-foreground">
-        {ev.tag} · {formatLocaleTime(ev.time, locale)} – {formatLocaleTime(eventEndClock(ev), locale)}
+        {localizedTag(locale, ev.tag)} · {formatLocaleTime(ev.time, locale)} – {formatLocaleTime(eventEndClock(ev), locale)}
       </p>
 
       <div className="mt-4 flex items-center gap-4">
@@ -318,10 +314,10 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
           size={72}
           stroke={9}
           value={ringValue}
-          label={flexible ? "Time left in this block" : "Block length"}
+          label={flexible ? t("focus.remaining") : t("focus.total", { total: ev.duration })}
         >
           <span className="text-sm font-bold">
-            {showCountdown ? `${Math.max(0, Math.ceil(shownRemaining / 60))}m` : `${ev.duration}m`}
+            {showCountdown ? t("unit.short", { n: Math.max(0, Math.ceil(shownRemaining / 60)) }) : t("unit.short", { n: ev.duration })}
           </span>
         </Ring>
         <div className="min-w-0">
@@ -390,7 +386,7 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
       </div>
 
       {ev.steps && ev.steps.length > 0 && (
-        <ul className="mt-4 space-y-1.5" aria-label="Micro-steps">
+        <ul className="mt-4 space-y-1.5" aria-label={t("steps.title")}>
           {ev.steps.map((s, i) => (
             <li key={s.id}>
               <button
@@ -416,29 +412,29 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
 
       {showNudges && (
         <div className="mt-4 space-y-3 rounded-2xl border border-border bg-background/40 p-3">
-          <p className="text-xs text-muted-foreground">Layered nudges — soft taps, never alarms.</p>
+          <p className="text-xs text-muted-foreground">{t("today.nudgeHint")}</p>
           <div className="grid grid-cols-4 gap-2">
-            {NUDGE_TIERS.map((t) => (
+            {NUDGE_TIERS.map((tier) => (
               <button
-                key={t.key}
+                key={tier.key}
                 type="button"
-                aria-pressed={ev.nudges[t.key]}
-                onClick={() => toggleNudge(ev.id, t.key)}
+                aria-pressed={ev.nudges[tier.key]}
+                onClick={() => toggleNudge(ev.id, tier.key)}
                 className={cn(
                   "rounded-xl border px-1 py-2 text-center transition-colors",
-                  ev.nudges[t.key]
+                  ev.nudges[tier.key]
                     ? "border-blue/60 bg-blue/15 text-blue"
                     : "border-border2 bg-card text-dim",
                 )}
               >
-                <span className="block text-xs font-semibold">{t.label}</span>
-                <span className="block text-[10px] opacity-80">{t.word}</span>
+                <span className="block text-xs font-semibold">{t(tier.key === "day" ? "nudge.layer.day" : tier.key === "hour" ? "nudge.layer.hour" : tier.key === "ten" ? "nudge.layer.ten" : "nudge.layer.now")}</span>
+                <span className="block text-[10px] opacity-80">{t(tier.key === "day" ? "nudge.word.day" : tier.key === "hour" ? "nudge.word.hour" : tier.key === "ten" ? "nudge.word.ten" : "nudge.word.now")}</span>
               </button>
             ))}
           </div>
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" className="flex-1 rounded-lg" onClick={() => previewNudges(ev.id)}>
-              <BellRing /> Preview nudge
+              <BellRing /> {t("today.preview")}
             </Button>
             {perm === "default" && (
               <Button
@@ -448,12 +444,12 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
                 onClick={async () => {
                   const p = await Notification.requestPermission();
                   setPerm(p);
-                  toast(p === "granted" ? "Browser nudges on" : "Staying in-app", {
-                    description: p === "granted" ? "We'll only tap you when the tab is in the background." : "In-app nudges still work.",
+                  toast(p === "granted" ? t("today.browserOn") : t("today.browserOff"), {
+                    description: p === "granted" ? t("today.browserOnBody") : t("today.browserOffBody"),
                   });
                 }}
               >
-                Allow browser nudges
+                {t("today.allow")}
               </Button>
             )}
           </div>

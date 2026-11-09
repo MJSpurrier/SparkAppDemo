@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
-import { useLocale, useT } from "@/lib/i18n/context";
+import { localizedTag, useLocale, useT } from "@/lib/i18n/context";
 import { formatLocaleDate, formatLocaleTime, weekdayNarrows } from "@/lib/i18n/format";
 import { barColor } from "@/components/nowmode/colors";
 import { Loading } from "@/components/nowmode/Loading";
@@ -10,7 +10,7 @@ import { IconButton, MenuButton } from "@/components/nowmode/ScreenHeader";
 import { TypeBadge } from "@/components/nowmode/ScheduleTypeField";
 import { useUI } from "@/components/nowmode/ui-context";
 import { unlockAlarm } from "@/lib/nowmode/alarm";
-import { countByDate, eventsOn, formatTime, toDateKey } from "@/lib/nowmode/logic";
+import { countByDate, eventsOn, toDateKey } from "@/lib/nowmode/logic";
 import { focusSwitchGate, planBlockTimer, scheduleOf } from "@/lib/nowmode/schedule";
 import { useNowMode } from "@/lib/nowmode/store";
 import type { NowEvent } from "@/lib/nowmode/types";
@@ -55,10 +55,10 @@ function CalendarScreen() {
         <MenuButton />
         <h1 className="truncate text-[22px] font-bold tracking-tight">{title}</h1>
         <div className="flex gap-2">
-          <IconButton label="Previous month" onClick={() => setOffset((o) => o - 1)}>
+          <IconButton label={t("cal.prev")} onClick={() => setOffset((o) => o - 1)}>
             <ChevronLeft className="size-4" />
           </IconButton>
-          <IconButton label="Next month" onClick={() => setOffset((o) => o + 1)}>
+          <IconButton label={t("cal.next")} onClick={() => setOffset((o) => o + 1)}>
             <ChevronRight className="size-4" />
           </IconButton>
         </div>
@@ -84,7 +84,7 @@ function CalendarScreen() {
                 key={key}
                 type="button"
                 onClick={() => setSelected(key)}
-                aria-label={`${day}, ${count} ${count === 1 ? "event" : "events"}`}
+                aria-label={`${day}, ${t(count === 1 ? "cal.one" : "cal.many", { n: count })}`}
                 className={cn(
                   "flex h-[58px] flex-col items-center rounded-xl border pt-1.5 transition-colors hover:bg-card2",
                   isToday ? "border-blue bg-card text-blue" : "border-border2 bg-card text-foreground",
@@ -149,7 +149,7 @@ function DayList({ dateKey, onBack }: { dateKey: string; onBack: () => void }) {
   return (
     <div className="pb-8">
       <header className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 px-5 pb-4 pt-5">
-        <IconButton label="Back to month" onClick={onBack}>
+        <IconButton label={t("cal.back")} onClick={onBack}>
           <ChevronLeft className="size-5" />
         </IconButton>
         <div className="min-w-0">
@@ -183,12 +183,12 @@ function DayList({ dateKey, onBack }: { dateKey: string; onBack: () => void }) {
                     <TypeBadge schedule={ev.schedule} />
                   </p>
                   <p className="text-xs text-dim">
-                    {ev.tag} · {ev.duration} min
+                    {localizedTag(locale, ev.tag)} · {ev.duration} min
                   </p>
                 </div>
                 <button
                   type="button"
-                  aria-label={ev.done ? `Mark ${ev.title} not done` : `Mark ${ev.title} done`}
+                  aria-label={ev.done ? t("today.markNotAria", { title: ev.title }) : t("today.markDoneAria", { title: ev.title })}
                   onClick={() => toggleDone(ev.id)}
                   className={cn(
                     "grid size-8 shrink-0 place-items-center rounded-full border",
