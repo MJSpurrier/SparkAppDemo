@@ -43,6 +43,7 @@ export function TabBar() {
       <div className="flex flex-1 justify-center">
         <button
           type="button"
+          data-tour="capture"
           aria-label={sheetOpen ? t("common.close") : t("nav.add")}
           aria-expanded={sheetOpen}
           onClick={() => (sheetOpen ? closeSheet() : openSheet("all"))}

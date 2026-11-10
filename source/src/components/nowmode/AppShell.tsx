@@ -6,6 +6,7 @@ import { StepEditor } from "./StepEditor";
 import { SideDrawer } from "./SideDrawer";
 import { TabBar } from "./TabBar";
 import { TimerSwitchDialog } from "./TimerSwitchDialog";
+import { TutorialTour } from "./TutorialTour";
 
 /** Phone-sized frame on larger screens, full-bleed on phones. */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -21,6 +22,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <TabBar />
         <SideDrawer />
+        <TutorialTour />
       </div>
     </div>
   );

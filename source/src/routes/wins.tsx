@@ -40,7 +40,7 @@ function WinsScreen() {
       <ScreenHeader back title={t("wins.title")} />
       <div className="space-y-5 px-5">
         <p className="text-sm leading-relaxed text-muted-foreground">{t("wins.intro")}</p>
-        <div className="grid grid-cols-4 gap-1 rounded-2xl border border-border bg-card p-1" role="radiogroup" aria-label={t("wins.span.all")}>
+        <div data-tour="wins" className="grid grid-cols-4 gap-1 rounded-2xl border border-border bg-card p-1" role="radiogroup" aria-label={t("wins.span.all")}>
           {spans.map((item) => (
             <button
               key={item}

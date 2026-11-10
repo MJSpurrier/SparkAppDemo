@@ -123,7 +123,7 @@ function FocusScreen() {
   };
 
   return (
-    <div className="relative flex min-h-full flex-col bg-focus">
+    <div data-tour="focus" className="relative flex min-h-full flex-col bg-focus">
       <header className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-5 pb-3 pt-5">
         <MenuButton />
         <span className="mx-auto rounded-full border border-blue/40 bg-blue/10 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-blue">
