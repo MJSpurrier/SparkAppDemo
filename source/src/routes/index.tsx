@@ -21,7 +21,7 @@ import {
   toDateKey,
 } from "@/lib/nowmode/logic";
 import { greetingName } from "@/lib/nowmode/profile";
-import { eventEndClock, focusSwitchGate, formatRange, planBlockTimer, scheduleOf } from "@/lib/nowmode/schedule";
+import { eventEndClock, focusSwitchGate, formatRange, hasDuration, planBlockTimer, scheduleOf } from "@/lib/nowmode/schedule";
 import { useNow, useNowMode } from "@/lib/nowmode/store";
 import type { Energy, FocusState, NowEvent } from "@/lib/nowmode/types";
 import { cn } from "@/lib/utils";
@@ -178,7 +178,8 @@ function EventRow({ ev }: { ev: NowEvent }) {
             <TypeBadge schedule={ev.schedule} />
           </p>
           <p className="text-xs text-dim">
-            {formatLocaleTime(ev.time, locale)} · {ev.duration} min
+            {formatLocaleTime(ev.time, locale)}
+            {hasDuration(ev) ? ` · ${ev.duration} min` : ""}
           </p>
         </div>
         <button
@@ -194,7 +195,7 @@ function EventRow({ ev }: { ev: NowEvent }) {
         </button>
       </div>
       <div className="mt-2 flex gap-2 pl-4">
-        {flexible && !ev.done && (
+        {flexible && hasDuration(ev) && !ev.done && (
           <RowAction onClick={() => openTimer(ev)}>
             {timerOpen ? t("today.openTimer") : planBlockTimer(ev, new Date()).ended ? t("today.addTime") : t("today.startTimer")}
           </RowAction>
@@ -284,7 +285,8 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
   const flexible = scheduleOf(ev) === "flexible";
   const linked = flexible && f.linkedToBlock && f.eventId === ev.id;
   const personalActive = !flexible && f.eventId === ev.id && !f.linkedToBlock && (f.running || (f.remainingSec < f.totalSec && !f.finished));
-  const block = planBlockTimer(ev, now);
+  const timed = hasDuration(ev);
+  const block = timed ? planBlockTimer(ev, now) : { remainingSec: 0, endsAt: 0, ended: false };
   const energyCopy = state.energy ? t(state.energy === "low" ? "energy.low" : state.energy === "okay" ? "energy.okay" : "energy.high") : t("energy.none");
 
   const goSprint = (minutes: number) => {
@@ -329,7 +331,8 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
       </div>
       <h2 className="mt-1 text-[22px] font-bold leading-tight">{ev.title}</h2>
       <p className="mt-0.5 text-sm text-muted-foreground">
-        {localizedTag(locale, ev.tag)} · {formatLocaleTime(ev.time, locale)} – {formatLocaleTime(eventEndClock(ev), locale)}
+        {localizedTag(locale, ev.tag)} · {formatLocaleTime(ev.time, locale)}
+        {timed ? ` – ${formatLocaleTime(eventEndClock(ev), locale)}` : ""}
       </p>
 
       <div className="mt-4 flex items-center gap-4">
@@ -337,10 +340,14 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
           size={72}
           stroke={9}
           value={ringValue}
-          label={flexible ? t("focus.remaining") : t("focus.total", { total: ev.duration })}
+          label={timed ? (flexible ? t("focus.remaining") : t("focus.total", { total: ev.duration ?? 0 })) : t("capture.pickTime")}
         >
           <span className="text-sm font-bold">
-            {showCountdown ? t("unit.short", { n: Math.max(0, Math.ceil(shownRemaining / 60)) }) : t("unit.short", { n: ev.duration })}
+            {timed
+              ? showCountdown
+                ? t("unit.short", { n: Math.max(0, Math.ceil(shownRemaining / 60)) })
+                : t("unit.short", { n: ev.duration ?? 0 })
+              : "—"}
           </span>
         </Ring>
         <div className="min-w-0">
@@ -348,11 +355,13 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
             {showCountdown ? formatMMSS(shownRemaining) : formatLocaleTime(ev.time, locale)}
           </p>
           <p className="mt-1.5 text-xs text-muted-foreground">
-            {flexible
-              ? block.ended
-                ? t("today.ended", { time: formatLocaleTime(eventEndClock(ev), locale), clock: formatLocaleTime(`${now.getHours()}:${now.getMinutes()}`, locale) })
-                : t("today.until", { time: formatLocaleTime(eventEndClock(ev), locale), clock: formatLocaleTime(`${now.getHours()}:${now.getMinutes()}`, locale) })
-              : t("today.ofMin", { n: ev.duration, clock: formatLocaleTime(`${now.getHours()}:${now.getMinutes()}`, locale) })}
+            {!timed
+              ? t("duration.none")
+              : flexible
+                ? block.ended
+                  ? t("today.ended", { time: formatLocaleTime(eventEndClock(ev), locale), clock: formatLocaleTime(`${now.getHours()}:${now.getMinutes()}`, locale) })
+                  : t("today.until", { time: formatLocaleTime(eventEndClock(ev), locale), clock: formatLocaleTime(`${now.getHours()}:${now.getMinutes()}`, locale) })
+                : t("today.ofMin", { n: ev.duration ?? 0, clock: formatLocaleTime(`${now.getHours()}:${now.getMinutes()}`, locale) })}
           </p>
         </div>
       </div>
@@ -360,15 +369,16 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
       <p className="mt-4 text-sm text-foreground/85">{energyCopy}</p>
 
       <div className="mt-4 grid grid-cols-2 gap-3">
-        {flexible ? (
-          <Button size="lg" className="h-11 rounded-xl text-[15px] font-semibold" onClick={() => openTimer(ev)}>
-            {linked && (f.running || f.endPromptFor) ? t("today.openTimer") : block.ended ? t("today.addTime") : t("today.startTimer")}
-          </Button>
-        ) : (
-          <Button size="lg" className="h-11 rounded-xl text-[15px] font-semibold" onClick={goPersonal}>
-            {personalActive ? t("today.backFocus") : t("today.startFocus")}
-          </Button>
-        )}
+        {timed &&
+          (flexible ? (
+            <Button size="lg" className="h-11 rounded-xl text-[15px] font-semibold" onClick={() => openTimer(ev)}>
+              {linked && (f.running || f.endPromptFor) ? t("today.openTimer") : block.ended ? t("today.addTime") : t("today.startTimer")}
+            </Button>
+          ) : (
+            <Button size="lg" className="h-11 rounded-xl text-[15px] font-semibold" onClick={goPersonal}>
+              {personalActive ? t("today.backFocus") : t("today.startFocus")}
+            </Button>
+          ))}
         <Button
           variant="secondary"
           size="lg"

@@ -16,12 +16,19 @@ export function scheduleOf(ev: { schedule?: ScheduleType | null }): ScheduleType
   return ev.schedule === "flexible" ? "flexible" : "fixed";
 }
 
+/** A real length turns on the timer, extension, and overlap checks. */
+export function hasDuration(ev: { duration?: number | null }): ev is { duration: number } {
+  return typeof ev.duration === "number" && Number.isInteger(ev.duration) && ev.duration >= 1 && ev.duration <= MAX_BLOCK_MINUTES;
+}
+
 export function eventStartMs(ev: Pick<NowEvent, "date" | "time">): number {
   return eventDate(ev).getTime();
 }
 
-export function eventEndMs(ev: Pick<NowEvent, "date" | "time" | "duration">): number {
-  return eventStartMs(ev) + ev.duration * 60_000;
+export function eventEndMs(ev: Pick<NowEvent, "date" | "time"> & { duration?: number | null }): number {
+  const start = eventStartMs(ev);
+  if (!hasDuration(ev)) return start;
+  return start + ev.duration * 60_000;
 }
 
 export function eventEndClock(ev: Pick<NowEvent, "date" | "time" | "duration">): string {
@@ -37,7 +44,7 @@ export function formatRange(ev: Pick<NowEvent, "date" | "time" | "duration">): s
 export interface SlotInput {
   date: string;
   time: string;
-  duration: number;
+  duration?: number;
 }
 
 export function validateSlot(input: SlotInput): { ok: true } | { ok: false; message: string } {
@@ -48,6 +55,7 @@ export function validateSlot(input: SlotInput): { ok: true } | { ok: false; mess
     return { ok: false, code: "date" as const, message: "Choose a real date." };
   }
   if (!TIME_RE.test(input.time.trim())) return { ok: false, code: "time" as const, message: "Use a start time like 14:00." };
+  if (input.duration == null) return { ok: true };
   if (!Number.isInteger(input.duration) || input.duration < 1 || input.duration > MAX_BLOCK_MINUTES) {
     return { ok: false, code: "minutes" as const, message: "Duration needs to be a whole number of minutes, from 1 to 720." };
   }
@@ -63,8 +71,9 @@ export function validateSlot(input: SlotInput): { ok: true } | { ok: false; mess
   return { ok: true };
 }
 
-export function parseMinutesInput(raw: string): { ok: true; minutes: number } | { ok: false; message: string } {
+export function parseMinutesInput(raw: string): { ok: true; minutes?: number } | { ok: false; message: string } {
   const trimmed = raw.trim();
+  if (!trimmed) return { ok: true };
   if (!/^\d+$/.test(trimmed)) {
     return { ok: false, code: "format" as const, message: "Enter a whole number of minutes, like 10." };
   }
@@ -90,6 +99,9 @@ export function planExtension(
   minutes: number,
   now: Date,
 ): { ok: true; plan: ExtensionPlan } | { ok: false; message: string } {
+  if (!hasDuration(ev)) {
+    return { ok: false, code: "minutes" as const, message: "Add a length before extending this block." };
+  }
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > MAX_BLOCK_MINUTES) {
     return { ok: false, code: "minutes" as const, message: "Enter a whole number of minutes, from 1 to 720." };
   }
@@ -138,7 +150,7 @@ export function fixedConflict(
   let hit: NowEvent | null = null;
   for (const other of events) {
     if (other.id === selfId || other.done) continue;
-    if (scheduleOf(other) !== "fixed") continue;
+    if (scheduleOf(other) !== "fixed" || !hasDuration(other)) continue;
     const b0 = eventStartMs(other);
     const b1 = eventEndMs(other);
     if (b1 <= now) continue;
@@ -244,7 +256,7 @@ export function migrateEvent(raw: Partial<NowEvent>): NowEvent {
     title: raw.title ?? "Untitled",
     date: raw.date ?? "2026-01-01",
     time: raw.time ?? "09:00",
-    duration: typeof raw.duration === "number" && raw.duration > 0 ? raw.duration : 25,
+    duration: typeof raw.duration === "number" && raw.duration > 0 ? Math.round(raw.duration) : undefined,
     tag: raw.tag ?? "Capture",
     color: raw.color ?? "blue",
     done: !!raw.done,
@@ -279,7 +291,7 @@ function migrateSeries(raw: unknown): RecurrenceRule[] {
       start: rule.start,
       end: typeof rule.end === "string" ? rule.end : undefined,
       time: typeof rule.time === "string" ? rule.time : "09:00",
-      duration: typeof rule.duration === "number" && rule.duration > 0 ? rule.duration : 25,
+      duration: typeof rule.duration === "number" && rule.duration > 0 ? rule.duration : undefined,
       schedule: rule.schedule === "fixed" ? "fixed" : "flexible",
       title: rule.title,
       tag: typeof rule.tag === "string" ? rule.tag : "Capture",
@@ -351,7 +363,7 @@ export function migrateAppState(raw: unknown, now = Date.now()): AppState | null
     version: 1,
     events,
     cards: Array.isArray(parsed.cards) ? parsed.cards : [],
-    links: Array.isArray(parsed.links) ? parsed.links : [],
+    links: [],
     prefs: { ...defaultPrefs, ...parsed.prefs },
     energy: parsed.energy ?? null,
     wins: Array.isArray(parsed.wins) ? parsed.wins.filter(isWinLike).map(migrateWin) : [],

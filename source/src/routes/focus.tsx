@@ -454,9 +454,9 @@ function ExtendPanel({ extendLinked }: { extendLinked: (minutes: number, force?:
         onSubmit={(e) => {
           e.preventDefault();
           const parsed = parseMinutesInput(custom);
-          if (!parsed.ok) {
+          if (!parsed.ok || parsed.minutes == null) {
             setPending(null);
-            setError(parsed.message);
+            setError(parsed.ok ? t("timer.noLength") : parsed.message);
             return;
           }
           go(parsed.minutes);

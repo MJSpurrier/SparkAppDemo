@@ -1,8 +1,8 @@
 /* Now Mode service worker.
-   nowmode-v6 drops older shells so this build installs cleanly.
+   nowmode-v7 drops older shells so this build installs cleanly.
    The app shell is network-first so a returning tester gets this version.
 */
-const CACHE = "nowmode-v6";
+const CACHE = "nowmode-v7";
 const SHELL = [
   "/SparkAppDemo/",
   "/SparkAppDemo/index.html",
@@ -75,6 +75,17 @@ self.addEventListener("fetch", (event) => {
       const response = await fetch(request);
       if (response.ok) cache.put(request, response.clone()).catch(() => {});
       return response;
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const open = clients.find((client) => client.url.includes("/SparkAppDemo/"));
+      if (open) return open.focus();
+      return self.clients.openWindow("/SparkAppDemo/");
     })
   );
 });

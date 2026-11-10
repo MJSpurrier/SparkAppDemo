@@ -135,6 +135,27 @@ export function ruleFromDraft(draft: Omit<RecurrenceRule, "id" | "skips"> & { id
   };
 }
 
+/** Remove one occurrence from the calendar. A series date is skipped so it does not return. Wins are left alone. */
+export function removeOccurrence(
+  events: NowEvent[],
+  series: RecurrenceRule[],
+  id: string,
+  today: Date,
+): { events: NowEvent[]; series: RecurrenceRule[] } {
+  const event = events.find((item) => item.id === id);
+  if (!event) return { events, series };
+  const nextSeries =
+    event.seriesId && event.occurrenceKey
+      ? series.map((rule) =>
+          rule.id === event.seriesId && !rule.skips.includes(event.occurrenceKey!)
+            ? { ...rule, skips: [...rule.skips, event.occurrenceKey!] }
+            : rule,
+        )
+      : series;
+  const kept = events.filter((item) => item.id !== id);
+  return { series: nextSeries, events: event.seriesId ? materializeSeries(kept, nextSeries, today) : kept };
+}
+
 /** Drop one occurrence and remember the date so a later horizon does not recreate it. A finished one stays. */
 export function skipOneOccurrence(
   events: NowEvent[],

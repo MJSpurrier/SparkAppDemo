@@ -24,8 +24,8 @@ export interface NowEvent {
   date: string;
   /** HH:MM 24h */
   time: string;
-  /** minutes */
-  duration: number;
+  /** Minutes. Missing means a time-only task: no countdown and no overlap. */
+  duration?: number;
   tag: string;
   color: EventColor;
   done: boolean;
@@ -91,6 +91,10 @@ export interface Prefs {
   /** Set only after they pick a clock time. Otherwise the time stays 90 minutes before quiet hours start. */
   boardReviewTime?: string;
   boardReviewManual?: boolean;
+  /** Built-in sound id, or "custom" for an imported file. */
+  alarmSound?: string;
+  /** 0–100. Missing means 60. */
+  alarmVolume?: number;
 }
 
 export type RecurrenceFreq = "daily" | "weekly" | "monthly" | "custom";
@@ -110,7 +114,7 @@ export interface RecurrenceRule {
   end?: string;
   /** Wall-clock HH:MM. Not an absolute instant, so daylight saving does not move it. */
   time: string;
-  duration: number;
+  duration?: number;
   schedule: ScheduleType;
   title: string;
   tag: string;

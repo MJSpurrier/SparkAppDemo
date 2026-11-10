@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { useLocale, useT } from "@/lib/i18n/context";
 import { formatLocaleTime } from "@/lib/i18n/format";
 import { LOCALES, type LocaleId } from "@/lib/i18n/locale";
+import { clearCustomSound, configureAlarm, playBlockChime, saveCustomSound, SOUND_IDS, unlockAlarm } from "@/lib/nowmode/alarm";
 import { useNowMode } from "@/lib/nowmode/store";
 import {
   DEFAULT_NUDGES,
@@ -136,6 +137,114 @@ function ProfileCard() {
   );
 }
 
+function SoundSettings() {
+  const t = useT();
+  const { state, setPrefs } = useNowMode();
+  const [note, setNote] = useState<string | null>(null);
+  const [perm, setPerm] = useState<NotificationPermission | "unsupported">("unsupported");
+  const sound = state.prefs.alarmSound ?? "chime";
+  const volume = state.prefs.alarmVolume ?? 60;
+  const options = [...SOUND_IDS, ...(sound === "custom" ? (["custom"] as const) : [])];
+
+  return (
+    <section className="space-y-3 rounded-2xl border border-border bg-card px-4 py-4">
+      <div>
+        <h2 className="text-sm font-semibold">{t("sound.title")}</h2>
+        <p className="text-xs text-dim">{t("sound.hint")}</p>
+      </div>
+      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t("sound.title")}>
+        {options.map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="radio"
+            aria-checked={sound === id}
+            onClick={() => setPrefs({ alarmSound: id })}
+            className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${sound === id ? "border-blue/60 bg-blue/15 text-blue" : "border-border2 text-muted-foreground"}`}
+          >
+            {t(id === "chime" ? "sound.chime" : id === "bell" ? "sound.bell" : id === "marimba" ? "sound.marimba" : id === "bowl" ? "sound.bowl" : id === "pulse" ? "sound.pulse" : "sound.custom")}
+          </button>
+        ))}
+      </div>
+      <label className="block text-xs font-semibold">
+        {t("sound.volume")} {volume}
+        <input
+          type="range"
+          min={0}
+          max={100}
+          value={volume}
+          aria-label={t("sound.volume")}
+          onChange={(e) => setPrefs({ alarmVolume: Number(e.target.value) })}
+          className="mt-1 w-full"
+        />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="secondary"
+          className="h-10 rounded-xl"
+          onClick={() => {
+            unlockAlarm();
+            configureAlarm({ id: sound, volume: volume / 100 });
+            playBlockChime(`preview-${Date.now()}`, true);
+          }}
+        >
+          {t("sound.preview")}
+        </Button>
+        <label className="inline-flex h-10 cursor-pointer items-center rounded-xl border border-border2 bg-card px-3 text-xs font-semibold">
+          {t("sound.import")}
+          <input
+            type="file"
+            accept="audio/*"
+            className="sr-only"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              const result = await saveCustomSound(file);
+              if (result !== "ok") {
+                setNote(t(result === "big" ? "sound.big" : "sound.bad"));
+                return;
+              }
+              setPrefs({ alarmSound: "custom" });
+              setNote(null);
+            }}
+          />
+        </label>
+        <Button
+          type="button"
+          variant="secondary"
+          className="h-10 rounded-xl"
+          onClick={() => {
+            void clearCustomSound();
+            setPrefs({ alarmSound: "chime", alarmVolume: 60 });
+            setNote(null);
+          }}
+        >
+          {t("sound.reset")}
+        </Button>
+      </div>
+      {note && <p role="alert" className="text-xs text-coral">{note}</p>}
+      <div className="space-y-2 border-t border-border pt-3">
+        <button
+          type="button"
+          className="h-10 rounded-xl border border-border2 px-3 text-xs font-semibold"
+          onClick={async () => {
+            if (typeof Notification === "undefined") {
+              setPerm("unsupported");
+              return;
+            }
+            setPerm(await Notification.requestPermission());
+          }}
+        >
+          {perm === "granted" ? t("sound.allowed") : t("sound.allow")}
+        </button>
+        <p className="text-[11px] leading-relaxed text-dim">{t("sound.limit")}</p>
+      </div>
+    </section>
+  );
+}
+
 function Account() {
   const t = useT();
   const locale = useLocale();
@@ -170,6 +279,8 @@ function Account() {
             </select>
           </label>
         </section>
+
+        <SoundSettings />
 
         <section>
           <h2 className="px-1 pb-2 text-[11px] font-bold uppercase tracking-wider text-dim">{t("account.section")}</h2>
