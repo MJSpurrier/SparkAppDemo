@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { BellRing, Moon, LogOut, Palette, Timer } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Avatar } from "@/components/nowmode/Avatar";
 import { greetingName } from "@/lib/nowmode/profile";
 import { toast } from "sonner";
@@ -13,6 +13,8 @@ import { useLocale, useT } from "@/lib/i18n/context";
 import { formatLocaleTime } from "@/lib/i18n/format";
 import { LOCALES, type LocaleId } from "@/lib/i18n/locale";
 import { clearCustomSound, configureAlarm, playBlockChime, saveCustomSound, SOUND_IDS, unlockAlarm } from "@/lib/nowmode/alarm";
+import { syncNativeReminders } from "@/lib/nowmode/native-sync";
+import { currentNotifyPermission, requestNotifyPermission } from "@/lib/nowmode/notify-permission";
 import { useNowMode } from "@/lib/nowmode/store";
 import {
   DEFAULT_NUDGES,
@@ -142,6 +144,9 @@ function SoundSettings() {
   const { state, setPrefs } = useNowMode();
   const [note, setNote] = useState<string | null>(null);
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">("unsupported");
+  useEffect(() => {
+    void currentNotifyPermission().then(setPerm);
+  }, []);
   const sound = state.prefs.alarmSound ?? "chime";
   const volume = state.prefs.alarmVolume ?? 60;
   const options = [...SOUND_IDS, ...(sound === "custom" ? (["custom"] as const) : [])];
@@ -230,16 +235,14 @@ function SoundSettings() {
           type="button"
           className="h-10 rounded-xl border border-border2 px-3 text-xs font-semibold"
           onClick={async () => {
-            if (typeof Notification === "undefined") {
-              setPerm("unsupported");
-              return;
-            }
-            setPerm(await Notification.requestPermission());
+            const next = await requestNotifyPermission();
+            setPerm(next);
+            if (next === "granted" && import.meta.env.VITE_NATIVE === "1") void syncNativeReminders(state);
           }}
         >
           {perm === "granted" ? t("sound.allowed") : t("sound.allow")}
         </button>
-        <p className="text-[11px] leading-relaxed text-dim">{t("sound.limit")}</p>
+        <p className="text-[11px] leading-relaxed text-dim">{import.meta.env.VITE_NATIVE === "1" ? t("sound.limitNative") : t("sound.limit")}</p>
       </div>
     </section>
   );

@@ -5,6 +5,7 @@ import { explainScheduleError, translate } from "@/lib/i18n/context";
 import { formatLocaleTime } from "@/lib/i18n/format";
 import { resolvedLocale } from "@/lib/i18n/context";
 import { configureAlarm, loadCustomSound, playBlockChime } from "./alarm";
+import { syncNativeReminders } from "./native-sync";
 import {
   NUDGE_TIERS,
   eventDate,
@@ -216,6 +217,11 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
     });
     if (state.prefs.alarmSound === "custom") void loadCustomSound();
   }, [ready, state.prefs.alarmSound, state.prefs.alarmVolume]);
+
+  useEffect(() => {
+    if (!ready || import.meta.env.VITE_NATIVE !== "1") return;
+    void syncNativeReminders(stateRef.current).catch(() => {});
+  }, [ready, state.events, state.prefs, state.focus.endsAt, state.focus.running, state.focus.label]);
 
   useEffect(() => {
     if (!ready) return;

@@ -92,6 +92,10 @@ function Appearance({ children }: { children: ReactNode }) {
   useEffect(() => {
     applyAppearance(mode, palette);
     document.documentElement.lang = locale === "en" ? "en" : locale;
+    if (import.meta.env.VITE_NATIVE === "1") {
+      void import("@/lib/nowmode/native-chrome").then((mod) => mod.syncChrome(mode, palette));
+      void import("@/lib/nowmode/push").then((mod) => mod.initPushIfConfigured());
+    }
   }, [mode, palette, locale]);
   return <LocaleProvider locale={locale}>{children}</LocaleProvider>;
 }

@@ -21,7 +21,7 @@ declare module "@tanstack/react-router" {
   }
 }
 
-if ("serviceWorker" in navigator) {
+if (import.meta.env.VITE_NATIVE !== "1" && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("/SparkAppDemo/sw.js").catch(() => {});
   });

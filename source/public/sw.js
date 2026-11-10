@@ -1,8 +1,8 @@
 /* Now Mode service worker.
-   nowmode-v8 drops older shells so this build installs cleanly.
+   nowmode-v9 drops older shells so this build installs cleanly.
    The app shell is network-first so a returning tester gets this version.
 */
-const CACHE = "nowmode-v8";
+const CACHE = "nowmode-v9";
 const SHELL = [
   "/SparkAppDemo/",
   "/SparkAppDemo/index.html",
@@ -45,6 +45,10 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  if (url.pathname.endsWith("/version.json")) {
+    event.respondWith(fetch(request, { cache: "no-store" }));
+    return;
+  }
 
   if (isAppShell(request)) {
     event.respondWith(

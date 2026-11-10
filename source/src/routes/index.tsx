@@ -13,6 +13,8 @@ import { TypeBadge } from "@/components/nowmode/ScheduleTypeField";
 import { useUI } from "@/components/nowmode/ui-context";
 import { Button } from "@/components/ui/button";
 import { unlockAlarm } from "@/lib/nowmode/alarm";
+import { syncNativeReminders } from "@/lib/nowmode/native-sync";
+import { currentNotifyPermission, requestNotifyPermission } from "@/lib/nowmode/notify-permission";
 import {
   NUDGE_TIERS,
   eventsOn,
@@ -278,7 +280,7 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
   const [showNudges, setShowNudges] = useState(false);
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">("unsupported");
   useEffect(() => {
-    setPerm(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
+    void currentNotifyPermission().then(setPerm);
   }, []);
 
   const f = state.focus;
@@ -475,8 +477,9 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
                 size="sm"
                 className="flex-1 rounded-lg text-muted-foreground"
                 onClick={async () => {
-                  const p = await Notification.requestPermission();
+                  const p = await requestNotifyPermission();
                   setPerm(p);
+                  if (p === "granted" && import.meta.env.VITE_NATIVE === "1") void syncNativeReminders(state);
                   toast(p === "granted" ? t("today.browserOn") : t("today.browserOff"), {
                     description: p === "granted" ? t("today.browserOnBody") : t("today.browserOffBody"),
                   });

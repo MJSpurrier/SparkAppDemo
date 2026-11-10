@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, CircleHelp, HandHeart, Home, MessageSquareText, Sparkles, Target, Trophy, UserRound, Waypoints, X } from "lucide-react";
+import { CalendarDays, CircleHelp, HandHeart, Home, MessageSquareText, Shield, Sparkles, Target, Trophy, UserRound, Waypoints, X } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { useEffect } from "react";
 
@@ -28,6 +28,7 @@ const destinations = [
   { to: "/mission", label: "nav.mission", hint: "drawer.missionHint", icon: Sparkles },
   { to: "/support", label: "nav.support", hint: "drawer.supportHint", icon: HandHeart },
   { to: "/feedback", label: "nav.feedback", hint: "drawer.feedbackHint", icon: MessageSquareText },
+  { to: "/privacy", label: "nav.privacy", hint: "drawer.privacyHint", icon: Shield },
 ] as const;
 
 export function SideDrawer() {

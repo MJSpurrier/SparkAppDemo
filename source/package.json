@@ -2,13 +2,25 @@
   "name": "now-mode",
   "private": true,
   "type": "module",
+  "version": "1.0.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:native": "VITE_NATIVE=1 vite build --outDir dist-native --emptyOutDir",
     "preview": "vite preview --base /SparkAppDemo/",
-    "test": "vitest run"
+    "test": "vitest run",
+    "cap:sync": "npm run build:native && cap sync",
+    "cap:android": "npm run build:native && cap sync android && cap open android",
+    "cap:ios": "npm run build:native && cap sync ios && cap open ios",
+    "open:android": "cap open android",
+    "open:ios": "cap open ios"
   },
   "dependencies": {
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/push-notifications": "^8.1.3",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.4",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-switch": "^1.2.6",
     "@tanstack/react-query": "^5.101.1",
@@ -23,6 +35,10 @@
     "tw-animate-css": "^1.3.4"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/assets": "^4.0.0",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/ios": "^8.6.0",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/router-plugin": "^1.120.0",
     "@testing-library/jest-dom": "^7.0.1",

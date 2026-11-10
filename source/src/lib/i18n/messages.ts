@@ -8,6 +8,7 @@ export const en = {
   "nav.mission": "Our Mission",
   "nav.support": "Support Now Mode",
   "nav.feedback": "Send feedback",
+  "nav.privacy": "Privacy",
   "nav.menu": "Open menu",
   "nav.close": "Close menu",
   "nav.back": "Back",
@@ -20,6 +21,7 @@ export const en = {
   "drawer.missionHint": "Why Now Mode exists",
   "drawer.supportHint": "Optional, always",
   "drawer.feedbackHint": "Tell us what helps",
+  "drawer.privacyHint": "Your data stays here",
   "drawer.you": "You",
   "drawer.winsToday": "{n} gentle wins today",
   "today.oneThing": "One thing now",
@@ -487,6 +489,18 @@ export const en = {
   "recur.deleteOneConfirm": "Remove this time? It will not come back. Finished history stays.",
   "recur.habit": "For reminders only. Now Mode never charges you or sends a bill.",
   "recur.confirm": "Delete",
+  "privacy.title": "Privacy",
+  "privacy.lead": "Your plans stay on this device.",
+  "privacy.p1": "Tasks, notes, wins, names, photos, sounds, and reminder choices are stored on the phone or browser you are using. Now Mode does not upload them.",
+  "privacy.p2": "There is no account, no analytics, and no advertising. Now Mode does not sell or share your plans. Nothing is collected.",
+  "privacy.p3": "Reminders are scheduled on the device. If announcement alerts are turned on later, they only carry app news. You can erase everything by clearing this app's data.",
+  "privacy.public": "The same page is public at {url}.",
+  "update.title": "Update available",
+  "update.body": "A newer Now Mode is ready. Your notes stay on this device.",
+  "update.later": "Not now",
+  "alarm.done": "Time's up",
+  "alarm.doneBody": "{title} is finished. One thing at a time.",
+  "sound.limitNative": "On the installed app, these reminders can sound even when Now Mode is closed. An imported sound uses the phone's default tone. The five built-in sounds play when the phone allows them.",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -501,6 +515,7 @@ const es419: Record<MessageKey, string> = {
   "nav.mission": "Nuestra misión",
   "nav.support": "Apoyar Now Mode",
   "nav.feedback": "Enviar comentarios",
+  "nav.privacy": "Privacidad",
   "nav.menu": "Abrir menú",
   "nav.close": "Cerrar menú",
   "nav.back": "Volver",
@@ -513,6 +528,7 @@ const es419: Record<MessageKey, string> = {
   "drawer.missionHint": "Por qué existe Now Mode",
   "drawer.supportHint": "Siempre opcional",
   "drawer.feedbackHint": "Cuéntanos qué te sirve",
+  "drawer.privacyHint": "Tus datos se quedan aquí",
   "drawer.you": "Tú",
   "drawer.winsToday": "{n} logros suaves hoy",
   "today.oneThing": "Una cosa ahora",
@@ -980,6 +996,18 @@ const es419: Record<MessageKey, string> = {
   "recur.deleteOneConfirm": "¿Quitar esta vez? No vuelve, y lo terminado se queda.",
   "recur.habit": "Solo avisos. Now Mode nunca cobra ni manda una factura.",
   "recur.confirm": "Borrar",
+  "privacy.title": "Privacidad",
+  "privacy.lead": "Tus planes se quedan en este dispositivo.",
+  "privacy.p1": "Tareas, notas, logros, nombres, fotos, sonidos y avisos se guardan en el teléfono o el navegador que estás usando. Now Mode no los sube.",
+  "privacy.p2": "No hay cuenta, ni analítica, ni publicidad. Now Mode no vende ni comparte tus planes. No se recolecta nada.",
+  "privacy.p3": "Los avisos se programan en el dispositivo. Si más adelante hay anuncios de la app, solo traen noticias de Now Mode. Puedes borrar todo limpiando los datos de esta app.",
+  "privacy.public": "La misma página es pública en {url}.",
+  "update.title": "Hay una actualización",
+  "update.body": "Hay un Now Mode más nuevo. Tus notas se quedan en este dispositivo.",
+  "update.later": "Ahora no",
+  "alarm.done": "Se acabó el tiempo",
+  "alarm.doneBody": "{title} terminó. Una cosa a la vez.",
+  "sound.limitNative": "En la app instalada, estos avisos pueden sonar aunque cierres Now Mode. Un sonido importado usa el tono del teléfono. Los cinco sonidos incluidos suenan cuando el teléfono lo permite.",
 };
 
 const esES: Record<MessageKey, string> = {
@@ -1283,6 +1311,12 @@ const esES: Record<MessageKey, string> = {
   "profile.greet": "Recíbeme como",
   "profile.missing": "Añade un nombre si quieres un saludo.",
   "profile.photoBig": "Esa foto es demasiado grande para guardarla en este dispositivo.",
+  "drawer.privacyHint": "Tus datos se quedan en el dispositivo",
+  "privacy.p1": "Tareas, notas, logros, nombres, fotos, sonidos y avisos se guardan en el teléfono o el navegador que usas. Now Mode no los envía a ningún sitio.",
+  "privacy.p2": "No hay cuenta, ni analítica, ni publicidad. Now Mode no vende ni comparte tus planes. No recoge nada.",
+  "privacy.p3": "Los avisos se programan en el dispositivo. Si más adelante hay avisos de novedades, solo traen noticias de Now Mode. Puedes borrar todo limpiando los datos de esta aplicación.",
+  "update.body": "Hay una versión más nueva de Now Mode. Tus notas se quedan en este dispositivo.",
+  "sound.limitNative": "En la aplicación instalada, estos avisos pueden sonar aunque cierres Now Mode. Un sonido importado usa el tono del teléfono. Los cinco sonidos incluidos suenan cuando el teléfono lo permite.",
 };
 
 export const messages = { en, "es-419": es419, "es-ES": esES } as const;

@@ -16,6 +16,7 @@ import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as FocusRouteImport } from './routes/focus'
 import { Route as MissionRouteImport } from './routes/mission'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as SupportRouteImport } from './routes/support'
 import { Route as WinsRouteImport } from './routes/wins'
 
@@ -54,6 +55,11 @@ const MissionRoute = MissionRouteImport.update({
   path: '/mission',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SupportRoute = SupportRouteImport.update({
   id: '/support',
   path: '/support',
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/feedback': typeof FeedbackRoute
   '/focus': typeof FocusRoute
   '/mission': typeof MissionRoute
+  '/privacy': typeof PrivacyRoute
   '/support': typeof SupportRoute
   '/wins': typeof WinsRoute
 }
@@ -84,6 +91,7 @@ export interface FileRoutesByTo {
   '/feedback': typeof FeedbackRoute
   '/focus': typeof FocusRoute
   '/mission': typeof MissionRoute
+  '/privacy': typeof PrivacyRoute
   '/support': typeof SupportRoute
   '/wins': typeof WinsRoute
 }
@@ -96,6 +104,7 @@ export interface FileRoutesById {
   '/feedback': typeof FeedbackRoute
   '/focus': typeof FocusRoute
   '/mission': typeof MissionRoute
+  '/privacy': typeof PrivacyRoute
   '/support': typeof SupportRoute
   '/wins': typeof WinsRoute
 }
@@ -109,6 +118,7 @@ export interface FileRouteTypes {
     | '/feedback'
     | '/focus'
     | '/mission'
+    | '/privacy'
     | '/support'
     | '/wins'
   fileRoutesByTo: FileRoutesByTo
@@ -120,6 +130,7 @@ export interface FileRouteTypes {
     | '/feedback'
     | '/focus'
     | '/mission'
+    | '/privacy'
     | '/support'
     | '/wins'
   id:
@@ -131,6 +142,7 @@ export interface FileRouteTypes {
     | '/feedback'
     | '/focus'
     | '/mission'
+    | '/privacy'
     | '/support'
     | '/wins'
   fileRoutesById: FileRoutesById
@@ -143,6 +155,7 @@ export interface RootRouteChildren {
   FeedbackRoute: typeof FeedbackRoute
   FocusRoute: typeof FocusRoute
   MissionRoute: typeof MissionRoute
+  PrivacyRoute: typeof PrivacyRoute
   SupportRoute: typeof SupportRoute
   WinsRoute: typeof WinsRoute
 }
@@ -198,6 +211,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MissionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/support': {
       id: '/support'
       path: '/support'
@@ -223,6 +243,7 @@ const rootRouteChildren: RootRouteChildren = {
   FeedbackRoute: FeedbackRoute,
   FocusRoute: FocusRoute,
   MissionRoute: MissionRoute,
+  PrivacyRoute: PrivacyRoute,
   SupportRoute: SupportRoute,
   WinsRoute: WinsRoute,
 }
