@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { explainScheduleError, translate } from "@/lib/i18n/context";
 import { formatLocaleTime } from "@/lib/i18n/format";
 import { resolvedLocale } from "@/lib/i18n/context";
-import { playBlockChime } from "./alarm";
+import { configureAlarm, loadCustomSound, playBlockChime } from "./alarm";
 import {
   NUDGE_TIERS,
   eventDate,
@@ -22,6 +22,7 @@ import {
   eventEndMs,
   fixedConflict,
   migrateAppState,
+  hasDuration,
   planBlockTimer,
   planExtension,
   scheduleOf,
@@ -31,7 +32,7 @@ import {
   type SlotInput,
 } from "./schedule";
 import { creditFocusSession } from "./focus-credit";
-import { deleteSeriesKeepingHistory, editSeriesScope, materializeSeries, skipOneOccurrence } from "./recurrence";
+import { deleteSeriesKeepingHistory, editSeriesScope, materializeSeries, removeOccurrence, skipOneOccurrence } from "./recurrence";
 import { createSeed } from "./seed";
 import type { RecurrenceRule } from "./types";
 import {
@@ -78,16 +79,20 @@ function load(): AppState {
 }
 
 export function notify(message: string, opts?: { title?: string }) {
-  toast(opts?.title ?? "Now Mode", { description: message });
+  const title = opts?.title ?? "Now Mode";
+  toast(title, { description: message });
+  void showSystemNotification(title, message);
+}
+
+async function showSystemNotification(title: string, body: string) {
   try {
-    if (
-      typeof Notification !== "undefined" &&
-      Notification.permission === "granted" &&
-      typeof document !== "undefined" &&
-      document.hidden
-    ) {
-      new Notification(opts?.title ?? "Now Mode", { body: message });
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    const reg = typeof navigator !== "undefined" ? await navigator.serviceWorker?.getRegistration() : undefined;
+    if (reg) {
+      await reg.showNotification(title, { body, icon: "/SparkAppDemo/icons/icon-192.png" });
+      return;
     }
+    new Notification(title, { body });
   } catch {
     /* notifications are optional */
   }
@@ -152,6 +157,7 @@ interface Store {
   addSeries: (rule: RecurrenceRule) => void;
   skipOccurrence: (id: string) => void;
   deleteSeries: (id: string) => void;
+  deleteEvent: (id: string) => void;
   cardAlreadyPlanned: (cardId: string) => boolean;
   addCard: (c: Omit<BoardCard, "id" | "x" | "y"> & Partial<Pick<BoardCard, "x" | "y">>) => void;
   moveCard: (id: string, x: number, y: number) => void;
@@ -193,6 +199,15 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
     setState(load());
     setReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    configureAlarm({
+      id: state.prefs.alarmSound ?? "chime",
+      volume: (state.prefs.alarmVolume ?? 60) / 100,
+    });
+    if (state.prefs.alarmSound === "custom") void loadCustomSound();
+  }, [ready, state.prefs.alarmSound, state.prefs.alarmVolume]);
 
   useEffect(() => {
     if (!ready) return;
@@ -484,6 +499,12 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
           const next = deleteSeriesKeepingHistory(s.events, s.series ?? [], id, toDateKey(new Date()));
           return { ...s, ...next };
         }),
+      deleteEvent: (id) =>
+        update((s) => {
+          const next = removeOccurrence(s.events, s.series ?? [], id, new Date());
+          const focus = s.focus.eventId === id ? { ...s.focus, linkedToBlock: false, running: false, eventId: null, endPromptFor: null } : s.focus;
+          return { ...s, ...next, focus };
+        }),
       cardAlreadyPlanned: (cardId) => {
         const s = stateRef.current;
         if (s.events.some((event) => event.sourceCardId === cardId && !event.done)) return true;
@@ -698,6 +719,9 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
         if (!ev) return { ok: false, message: translate(localeOf(stateRef.current.prefs), "timer.missing") };
         if (scheduleOf(ev) !== "flexible") {
           return { ok: false, message: translate(localeOf(stateRef.current.prefs), "timer.fixedSeparate") };
+        }
+        if (!hasDuration(ev)) {
+          return { ok: false, message: translate(localeOf(stateRef.current.prefs), "timer.noLength") };
         }
         const plan = planBlockTimer(ev, new Date());
         setState((prev) => ({

@@ -198,7 +198,8 @@ describe("migration", () => {
     expect(next.events[1]?.schedule).toBe("flexible");
     expect(next.events.some((e) => e.title === "Draft product brief")).toBe(false);
     expect(next.cards[0]?.text).toBe("keep me");
-    expect(next.links).toHaveLength(1);
+    expect(next.links).toEqual([]);
+    expect(next.events[0]?.duration).toBe(50);
     expect(next.wins[0]?.label).toBe("Therapy notes");
     expect(next.prefs.quietHours).toBe(true);
     expect(next.prefs.layeredNudges).toBe(false);

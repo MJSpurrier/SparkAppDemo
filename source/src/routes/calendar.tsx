@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useState } from "react";
 
 import { localizedTag, useLocale, useT } from "@/lib/i18n/context";
@@ -11,7 +11,7 @@ import { TypeBadge } from "@/components/nowmode/ScheduleTypeField";
 import { useUI } from "@/components/nowmode/ui-context";
 import { unlockAlarm } from "@/lib/nowmode/alarm";
 import { countByDate, eventsOn, toDateKey } from "@/lib/nowmode/logic";
-import { focusSwitchGate, planBlockTimer, scheduleOf } from "@/lib/nowmode/schedule";
+import { focusSwitchGate, hasDuration, planBlockTimer, scheduleOf } from "@/lib/nowmode/schedule";
 import { useNowMode } from "@/lib/nowmode/store";
 import type { NowEvent } from "@/lib/nowmode/types";
 import { cn } from "@/lib/utils";
@@ -119,12 +119,14 @@ function CalendarScreen() {
 function DayList({ dateKey, onBack }: { dateKey: string; onBack: () => void }) {
   const t = useT();
   const locale = useLocale();
-  const { state, toggleDone, startLinkedTimer, resumeFocus } = useNowMode();
+  const { state, toggleDone, startLinkedTimer, resumeFocus, deleteEvent, deleteSeries } = useNowMode();
   const { openSchedule, openSteps, askTimer } = useUI();
   const navigate = useNavigate();
   const [y = 2026, m = 1, d = 1] = dateKey.split("-").map(Number);
   const date = new Date(y, m - 1, d);
   const list = eventsOn(state.events, dateKey);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const pending = list.find((event) => event.id === confirmId) ?? null;
 
   const openTimer = (ev: NowEvent) => {
     unlockAlarm();
@@ -183,9 +185,18 @@ function DayList({ dateKey, onBack }: { dateKey: string; onBack: () => void }) {
                     <TypeBadge schedule={ev.schedule} />
                   </p>
                   <p className="text-xs text-dim">
-                    {localizedTag(locale, ev.tag)} · {ev.duration} min
+                    {localizedTag(locale, ev.tag)}
+                    {hasDuration(ev) ? ` · ${ev.duration} min` : ` · ${t("duration.none")}`}
                   </p>
                 </div>
+                <button
+                  type="button"
+                  aria-label={t("cal.delete", { title: ev.title })}
+                  onClick={() => setConfirmId(ev.id)}
+                  className="grid size-8 shrink-0 place-items-center rounded-full border border-border2 text-dim hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
                 <button
                   type="button"
                   aria-label={ev.done ? t("today.markNotAria", { title: ev.title }) : t("today.markDoneAria", { title: ev.title })}
@@ -199,7 +210,7 @@ function DayList({ dateKey, onBack }: { dateKey: string; onBack: () => void }) {
                 </button>
               </div>
               <div className="mt-2 flex gap-2 pl-[4.75rem]">
-                {flexible && !ev.done && (
+                {flexible && hasDuration(ev) && !ev.done && (
                   <button
                     type="button"
                     onClick={() => openTimer(ev)}
@@ -238,6 +249,42 @@ function DayList({ dateKey, onBack }: { dateKey: string; onBack: () => void }) {
           );
         })}
       </ol>
+      {pending && (
+        <div className="fixed inset-0 z-40 grid place-items-end px-4 pb-4 sm:place-items-center" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+          <button type="button" className="absolute inset-0 bg-ink/70" aria-label={t("common.cancel")} onClick={() => setConfirmId(null)} />
+          <div className="relative w-full max-w-sm rounded-[20px] border border-border2 bg-card2 p-5 shadow-shell">
+            <h2 id="delete-title" className="text-lg font-bold">{t("cal.deleteTitle")}</h2>
+            <p className="mt-2 text-sm text-muted-foreground">{pending.seriesId ? t("cal.deleteSeriesBody", { title: pending.title }) : t("cal.deleteBody", { title: pending.title })}</p>
+            <div className="mt-4 grid gap-2">
+              <button
+                type="button"
+                className="h-11 rounded-xl bg-primary text-sm font-semibold text-primary-foreground"
+                onClick={() => {
+                  deleteEvent(pending.id);
+                  setConfirmId(null);
+                }}
+              >
+                {pending.seriesId ? t("recur.scopeOne") : t("cal.deleteConfirm")}
+              </button>
+              {pending.seriesId && (
+                <button
+                  type="button"
+                  className="h-11 rounded-xl border border-border2 text-sm font-semibold"
+                  onClick={() => {
+                    if (pending.seriesId) deleteSeries(pending.seriesId);
+                    setConfirmId(null);
+                  }}
+                >
+                  {t("recur.scopeSeries")}
+                </button>
+              )}
+              <button type="button" className="h-11 rounded-xl text-sm font-semibold text-muted-foreground" onClick={() => setConfirmId(null)}>
+                {t("common.cancel")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

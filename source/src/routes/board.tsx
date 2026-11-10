@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ImageIcon, Link2, Play, Plus, X, ZoomIn, ZoomOut } from "lucide-react";
+import { ImageIcon, Play, Plus, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { toast } from "sonner";
 
@@ -18,9 +18,9 @@ export const Route = createFileRoute("/board")({
   head: () => ({
     meta: [
       { title: "Board · Now Mode" },
-      { name: "description", content: "An investigation pin board for ideas — drag cards and connect them with red string." },
+      { name: "description", content: "A pin board for ideas. Drag notes around and schedule the ones you want." },
       { property: "og:title", content: "Board · Now Mode" },
-      { property: "og:description", content: "An investigation pin board for ideas — drag cards and connect them with red string." },
+      { property: "og:description", content: "A pin board for ideas. Drag notes around and schedule the ones you want." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -43,13 +43,11 @@ interface Drag {
 
 function BoardScreen() {
   const t = useT();
-  const { ready, state, moveCard, removeCard, addLink, removeLink } = useNowMode();
+  const { ready, state, moveCard, removeCard } = useNowMode();
   const { openSheet, openCardSchedule } = useUI();
   const locale = useLocale();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
-  const [mode, setMode] = useState<null | "add" | "remove">(null);
-  const [pending, setPending] = useState<string | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
@@ -57,7 +55,6 @@ function BoardScreen() {
   if (!ready) return <Loading />;
 
   const pos = (c: BoardCard) => (drag?.id === c.id ? { x: drag.x, y: drag.y } : { x: c.x, y: c.y });
-  const byId = new Map(state.cards.map((c) => [c.id, c]));
   const height = Math.max(560, ...state.cards.map((c) => pos(c).y + 180));
 
   const local = (e: ReactPointerEvent) => {
@@ -66,7 +63,6 @@ function BoardScreen() {
   };
 
   const onDown = (e: ReactPointerEvent<HTMLDivElement>, c: BoardCard) => {
-    if (mode) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const p = local(e);
     setDrag({ id: c.id, offX: p.x - c.x, offY: p.y - c.y, x: c.x, y: c.y, startX: p.x, startY: p.y, moved: false });
@@ -90,52 +86,12 @@ function BoardScreen() {
     setDrag(null);
   };
 
-  const linkBetween = (a: string, b: string) =>
-    state.links.find((link) => (link.from === a && link.to === b) || (link.from === b && link.to === a));
-
-  const tapPin = (id: string) => {
-    if (!mode) return;
-    if (!pending) {
-      setPending(id);
-      return;
-    }
-    if (pending === id) {
-      setPending(null);
-      return;
-    }
-    if (mode === "remove") {
-      const link = linkBetween(pending, id);
-      if (link) {
-        removeLink(link.id);
-        toast(t("board.stringRemoved"));
-      }
-      setPending(null);
-      return;
-    }
-    const ok = addLink(pending, id);
-    toast(ok ? t("board.connected") : t("board.already"), { description: ok ? t("board.tied") : undefined });
-    setPending(null);
-  };
-
-  const exitMode = () => {
-    setMode(null);
-    setPending(null);
-  };
-
   return (
     <div className="flex h-full flex-col">
       <ScreenHeader title={t("nav.board")} right={<Pill>{t("board.hint")}</Pill>} />
 
       <div className="relative mx-5 min-h-0 flex-1 overflow-hidden rounded-[20px] border border-border2 bg-cork shadow-card">
         <div className="cork-grain pointer-events-none absolute inset-0" />
-        {mode && (
-          <div className="absolute inset-x-3 top-2 z-30 flex items-center justify-between gap-2 rounded-full bg-ink/80 px-3 py-1 text-[11px] font-semibold text-foreground">
-            <span>{mode === "remove" ? t("board.removeMode") : pending ? t("board.second") : t("board.start")}</span>
-            <button type="button" onClick={exitMode} className="underline">
-              {t("board.cancelMode")}
-            </button>
-          </div>
-        )}
         <div className="no-scrollbar h-full overflow-auto">
           <div
             ref={canvasRef}
@@ -201,92 +157,30 @@ function BoardScreen() {
               );
             })}
 
-            {/* Red strings */}
-            <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible">
-              {state.links.map((l) => {
-                const a = byId.get(l.from);
-                const b = byId.get(l.to);
-                if (!a || !b) return null;
-                const pa = pos(a);
-                const pb = pos(b);
-                const x1 = pa.x + CARD_W / 2;
-                const y1 = pa.y;
-                const x2 = pb.x + CARD_W / 2;
-                const y2 = pb.y;
-                const sag = Math.min(50, Math.hypot(x2 - x1, y2 - y1) * 0.18);
-                const d = `M ${x1} ${y1} Q ${(x1 + x2) / 2} ${(y1 + y2) / 2 + sag} ${x2} ${y2}`;
-                return (
-                  <g key={l.id}>
-                    <path d={d} fill="none" strokeWidth={2.5} strokeLinecap="round" className="stroke-string" />
-                    <path
-                      d={d}
-                      fill="none"
-                      strokeWidth={16}
-                      stroke="transparent"
-                      className={cn(mode !== "add" && "cursor-pointer")}
-                      style={{ pointerEvents: mode === "add" ? "none" : "stroke" }}
-                      onClick={() => {
-                        removeLink(l.id);
-                        toast(t("board.stringRemoved"), {
-                          action: { label: t("board.undo"), onClick: () => addLink(l.from, l.to) },
-                        });
-                      }}
-                    >
-                      <title>{t("board.removeString")}</title>
-                    </path>
-                  </g>
-                );
-              })}
-            </svg>
-
-            {/* Pins */}
             {state.cards.map((c) => {
               const p = pos(c);
-              const isPending = pending === c.id;
               return (
-                <button
+                <span
                   key={`pin-${c.id}`}
-                  type="button"
-                  aria-label={t("board.pin", { text: c.text })}
-                  onClick={() => tapPin(c.id)}
-                  className="absolute z-20 grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center"
+                  aria-hidden
+                  className="pointer-events-none absolute z-20 grid size-7 -translate-x-1/2 -translate-y-1/2 place-items-center"
                   style={{ left: p.x + CARD_W / 2, top: p.y }}
                 >
-                  <span
-                    className={cn(
-                      "block size-3.5 rounded-full bg-string shadow-[inset_-2px_-2px_0_oklch(0_0_0/0.25)] ring-1 ring-ink/40 transition-transform",
-                      mode === "add" && "scale-110",
-                      isPending && "scale-150 ring-2 ring-cream",
-                    )}
-                  />
-                </button>
+                  <span className="block size-3.5 rounded-full bg-string shadow-[inset_-2px_-2px_0_oklch(0_0_0/0.25)] ring-1 ring-ink/40" />
+                </span>
               );
             })}
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2.5 px-5 py-3">
+      <div className="grid grid-cols-2 gap-2.5 px-5 py-3">
         <button
           type="button"
           onClick={() => openSheet("board")}
           className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-blue/70 bg-blue/10 text-sm font-semibold text-blue"
         >
           <Plus className="size-4" /> {t("board.card")}
-        </button>
-        <button
-          type="button"
-          aria-pressed={mode != null}
-          onClick={() => {
-            setPending(null);
-            setMode((current) => (current === "add" ? "remove" : "add"));
-          }}
-          className={cn(
-            "inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border px-2 text-sm font-semibold transition-colors",
-            mode ? "border-string/70 bg-string/15 text-foreground" : "border-border2 bg-card text-foreground",
-          )}
-        >
-          <Link2 className="size-4 shrink-0" /> {mode === "add" ? t("board.disconnect") : t("board.connect")}
         </button>
         <button
           type="button"

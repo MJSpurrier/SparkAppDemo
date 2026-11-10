@@ -7,6 +7,7 @@ import {
   eventEndClock,
   eventStartMs,
   fixedConflict,
+  hasDuration,
   scheduleOf,
   validateSlot,
 } from "@/lib/nowmode/schedule";
@@ -33,7 +34,7 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
   const ev = state.events.find((e) => e.id === eventId);
   const [date, setDate] = useState(ev?.date ?? "");
   const [time, setTime] = useState(ev?.time ?? "");
-  const [duration, setDuration] = useState(String(ev?.duration ?? 30));
+  const [duration, setDuration] = useState(ev?.duration ? String(ev.duration) : "");
   const [schedule, setSchedule] = useState<ScheduleType>(ev ? scheduleOf(ev) : "fixed");
   const [error, setError] = useState<string | null>(null);
   const [scope, setScope] = useState<"one" | "series">("one");
@@ -47,12 +48,12 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const parsedDuration = /^\d+$/.test(duration.trim()) ? Number(duration.trim()) : Number.NaN;
+  const parsedDuration = /^\d+$/.test(duration.trim()) ? Number(duration.trim()) : undefined;
   const slot = { date, time, duration: parsedDuration };
   const valid = validateSlot(slot);
 
   const conflict = useMemo(() => {
-    if (!ev || !valid.ok) return null;
+    if (!ev || !valid.ok || parsedDuration == null) return null;
     const start = eventStartMs({ date, time });
     const end = start + parsedDuration * 60_000;
     return fixedConflict(state.events, ev.id, start, end, Date.now());
@@ -62,7 +63,8 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
 
   const fixed = schedule === "fixed";
   const title = fixed ? t("schedule.move") : t("schedule.edit");
-  const endLabel = valid.ok ? formatLocaleTime(eventEndClock({ date, time, duration: parsedDuration }), locale) : null;
+  const endLabel =
+    valid.ok && parsedDuration != null ? formatLocaleTime(eventEndClock({ date, time, duration: parsedDuration }), locale) : null;
 
   const save = () => {
     if (!valid.ok) {
@@ -148,8 +150,10 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
             </label>
             <label className="block text-xs font-semibold">
               {t("schedule.minutes")}
+              <span className="ml-1 font-normal text-dim">{t("duration.optional")}</span>
               <input
                 inputMode="numeric"
+                placeholder={t("duration.optional")}
                 value={duration}
                 onChange={(e) => {
                   setDuration(e.target.value);
@@ -161,7 +165,7 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
             </label>
           </div>
           <p id="duration-hint" className="text-xs text-muted-foreground">
-            {endLabel ? t("schedule.ends", { time: endLabel }) : t("schedule.sameDay")}
+            {endLabel ? t("schedule.ends", { time: endLabel }) : parsedDuration == null ? t("duration.none") : t("schedule.sameDay")}
           </p>
 
           {conflict && (

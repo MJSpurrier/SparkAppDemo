@@ -145,7 +145,7 @@ function TextCapture() {
   const { sheetMode, closeSheet, captureDraft } = useUI();
   const [text, setText] = useState(captureDraft?.text ?? "");
   const [schedule, setSchedule] = useState<ScheduleType>("flexible");
-  const [minutes, setMinutes] = useState("25");
+  const [minutes, setMinutes] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [step, setStep] = useState<"date" | "time">("date");
@@ -283,9 +283,11 @@ function TextCapture() {
           />
           <label className="block text-xs font-semibold">
             {t("capture.length")}
+            <span className="ml-1 font-normal text-dim">{t("duration.optional")}</span>
             <input
               inputMode="numeric"
               value={minutes}
+              placeholder={t("duration.optional")}
               onChange={(e) => {
                 setMinutes(e.target.value);
                 setError(null);
