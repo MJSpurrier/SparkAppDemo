@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { explainScheduleError, translate } from "@/lib/i18n/context";
 import { formatLocaleTime } from "@/lib/i18n/format";
 import { resolvedLocale } from "@/lib/i18n/context";
+import { focusWinLabel } from "./profile";
 import { playBlockChime } from "./alarm";
 import {
   NUDGE_TIERS,
@@ -30,11 +31,14 @@ import {
   validateSlot,
   type SlotInput,
 } from "./schedule";
+import { applySeriesTiming, materializeSeries } from "./recurrence";
 import { createSeed } from "./seed";
+import type { RecurrenceRule } from "./types";
 import {
   DEFAULT_NUDGES,
   DEFAULT_QUIET_END,
   DEFAULT_QUIET_START,
+  effectiveBoardReviewTime,
   isQuietAt,
   normalizeLead,
   nudgeTierAllowed,
@@ -56,14 +60,16 @@ export type ExtendResult =
   | { ok: true }
   | { ok: false; message: string; reason?: "conflict"; minutes?: number };
 
-export type ScheduleInput = SlotInput & { schedule: ScheduleType };
+export type ScheduleInput = SlotInput & { schedule: ScheduleType; scope?: "one" | "series" };
 
 function load(): AppState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const migrated = migrateAppState(JSON.parse(raw));
-      if (migrated) return migrated;
+      if (migrated) {
+        return { ...migrated, events: materializeSeries(migrated.events, migrated.series ?? [], new Date()) };
+      }
     }
   } catch {
     /* fall through to seed */
@@ -142,6 +148,11 @@ interface Store {
   toggleNudge: (eventId: string, key: NudgeKey) => void;
   previewNudges: (eventId: string) => void;
   setPrefs: (p: Partial<Prefs>) => void;
+  setFocusLabel: (label: string) => void;
+  addSeries: (rule: RecurrenceRule) => void;
+  skipOccurrence: (id: string) => void;
+  deleteSeries: (id: string) => void;
+  cardAlreadyPlanned: (cardId: string) => boolean;
   addCard: (c: Omit<BoardCard, "id" | "x" | "y"> & Partial<Pick<BoardCard, "x" | "y">>) => void;
   moveCard: (id: string, x: number, y: number) => void;
   removeCard: (id: string) => void;
@@ -335,10 +346,11 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
     if (!ready) return;
     const check = () => {
       const s = stateRef.current;
-      if (!s.prefs.layeredNudges) return;
       const now = new Date();
       const fired: string[] = [];
-      for (const ev of s.events) {
+      if (!s.prefs.layeredNudges) {
+        /* Board review is its own switch and still runs below. */
+      } else for (const ev of s.events) {
         if (ev.done) continue;
         const at = eventDate(ev).getTime();
         for (const tier of NUDGE_TIERS) {
@@ -352,6 +364,23 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
             if (!quietNow(s.prefs, now)) {
               const locale = localeOf(s.prefs);
               notify(translate(locale, `nudge.${tier.key}`, { title: ev.title, time: formatLocaleTime(ev.time, locale) }));
+            }
+          }
+        }
+      }
+      if (s.prefs.boardReviewOn) {
+        const time = effectiveBoardReviewTime(s.prefs);
+        const key = `board-review:${toDateKey(now)}:${time}`;
+        if (!s.firedNudges.includes(key)) {
+          const [hour = 0, minute = 0] = time.split(":").map(Number);
+          const target = new Date(now);
+          target.setHours(hour, minute, 0, 0);
+          const diff = now.getTime() - target.getTime();
+          if (diff >= 0 && diff < 5 * 60_000) {
+            fired.push(key);
+            if (!quietNow(s.prefs, now)) {
+              const locale = localeOf(s.prefs);
+              notify(translate(locale, "board.reviewNow"));
             }
           }
         }
@@ -451,6 +480,36 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
         );
       },
       setPrefs: (p) => update((s) => ({ ...s, prefs: { ...s.prefs, ...p } })),
+      setFocusLabel: (label) => updateFocus((f) => ({ ...f, label, nameEdited: true })),
+      addSeries: (rule) =>
+        update((s) => {
+          const series = [...(s.series ?? []), rule];
+          return { ...s, series, events: materializeSeries(s.events, series, new Date()) };
+        }),
+      skipOccurrence: (id) =>
+        update((s) => {
+          const event = s.events.find((item) => item.id === id);
+          if (!event?.seriesId || !event.occurrenceKey) return s;
+          const series = (s.series ?? []).map((rule) =>
+            rule.id === event.seriesId && !rule.skips.includes(event.occurrenceKey!)
+              ? { ...rule, skips: [...rule.skips, event.occurrenceKey!] }
+              : rule,
+          );
+          const events = event.done ? s.events : s.events.filter((item) => item.id !== id);
+          return { ...s, series, events: materializeSeries(events, series, new Date()) };
+        }),
+      deleteSeries: (id) =>
+        update((s) => {
+          const today = toDateKey(new Date());
+          const series = (s.series ?? []).filter((rule) => rule.id !== id);
+          const events = s.events.filter((event) => event.seriesId !== id || event.done || event.date < today);
+          return { ...s, series, events };
+        }),
+      cardAlreadyPlanned: (cardId) => {
+        const s = stateRef.current;
+        if (s.events.some((event) => event.sourceCardId === cardId && !event.done)) return true;
+        return (s.series ?? []).some((rule) => rule.sourceCardId === cardId);
+      },
       addCard: (c) =>
         update((s) => {
           const n = s.cards.length;
@@ -489,6 +548,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
             ...f,
             presetId: id,
             label: p?.label ?? f.label,
+            nameEdited: false,
             eventId: null,
             linkedToBlock: false,
             endPromptFor: null,
@@ -792,6 +852,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
         if (!ev) return { ok: false, message: translate(localeOf(stateRef.current.prefs), "timer.missing") };
         const next = applyReschedule(ev, input);
         const moved = slotChanged(ev, input);
+        const scope = raw.scope === "series" && ev.seriesId ? "series" : "one";
         setState((prev) => {
           let focus = prev.focus;
           if (focus.eventId === id && focus.linkedToBlock) {
@@ -812,9 +873,26 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
               };
             }
           }
+          let series = prev.series ?? [];
+          let events = prev.events.map((e) =>
+            e.id === id ? { ...next, exception: scope === "one" && ev.seriesId ? true : e.exception, occurrenceKey: e.occurrenceKey } : e,
+          );
+          if (scope === "series" && ev.seriesId) {
+            series = series.map((rule) =>
+              rule.id === ev.seriesId ? { ...rule, time: next.time, duration: next.duration, schedule: next.schedule } : rule,
+            );
+            const rule = series.find((item) => item.id === ev.seriesId);
+            if (next.date !== ev.date) {
+              events = events.map((e) =>
+                e.id === id ? { ...next, exception: true, occurrenceKey: ev.occurrenceKey ?? ev.date, seriesId: ev.seriesId } : e,
+              );
+            }
+            if (rule) events = applySeriesTiming(events, rule, toDateKey(new Date()));
+          }
           return {
             ...prev,
-            events: prev.events.map((e) => (e.id === id ? next : e)),
+            series,
+            events: materializeSeries(events, series, new Date()),
             firedNudges: moved ? clearFiredFor(prev.firedNudges, id) : prev.firedNudges,
             focus,
           };
@@ -824,22 +902,16 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
       setBodyDouble: (on) => updateFocus((f) => ({ ...f, bodyDouble: on })),
       checkIn: (choice) => {
         const f = stateRef.current.focus;
-        if (f.linkedToBlock) return;
+        if (f.linkedToBlock || !f.finished) return;
         if (choice === "more") {
           updateFocus((x) => extendFocusState(x, 5));
           return;
         }
-        addWin(
-          f.label ||
-            translate(
-              resolvedLocale(
-                stateRef.current.prefs.locale,
-                typeof navigator === "undefined" ? undefined : navigator.language,
-              ),
-              "focus.session",
-            ),
-          f.eventId ?? undefined,
+        const locale = resolvedLocale(
+          stateRef.current.prefs.locale,
+          typeof navigator === "undefined" ? undefined : navigator.language,
         );
+        addWin(focusWinLabel(f, (key) => translate(locale, key)), f.eventId ?? undefined);
         if (f.eventId) {
           updateEvent(f.eventId, (e) => ({ ...e, done: true }));
         }

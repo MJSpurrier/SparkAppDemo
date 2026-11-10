@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Bell, BellRing, Check, Clock3, Moon, Scissors, Sparkles, Zap } from "lucide-react";
+import { Bell, BellRing, Check, ChevronDown, Clock3, Moon, Scissors, Sparkles, Zap } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -20,6 +20,7 @@ import {
   nextUp,
   toDateKey,
 } from "@/lib/nowmode/logic";
+import { greetingName } from "@/lib/nowmode/profile";
 import { eventEndClock, focusSwitchGate, formatRange, planBlockTimer, scheduleOf } from "@/lib/nowmode/schedule";
 import { useNow, useNowMode } from "@/lib/nowmode/store";
 import type { Energy, FocusState, NowEvent } from "@/lib/nowmode/types";
@@ -44,13 +45,16 @@ function Today() {
   const locale = useLocale();
   const { ready, state, setEnergy } = useNowMode();
   const now = useNow(1000);
+  const [completedOpen, setCompletedOpen] = useState(false);
   if (!ready) return <Loading />;
 
   const todayKey = toDateKey(now);
   const today = eventsOn(state.events, todayKey);
   const up = nextUp(state.events, todayKey);
   const doneCount = today.filter((e) => e.done).length;
-  const rest = today.filter((e) => e.id !== up?.id);
+  const rest = today.filter((e) => !e.done && e.id !== up?.id);
+  const completed = today.filter((e) => e.done);
+  const hello = greetingName(state.prefs);
   const left = today.filter((e) => !e.done && e.id !== up?.id).length;
   const wins = state.wins.filter((w) => w.date === todayKey).length;
   const allClear = !up;
@@ -59,51 +63,70 @@ function Today() {
   return (
     <div className="pb-8">
       <ScreenHeader
-        kicker={kicker}
+        kicker={
+          <>
+            {hello && <span className="block truncate font-semibold text-foreground">{t("today.hello", { name: hello })}</span>}
+            <span className="block truncate">{kicker}</span>
+          </>
+        }
         title={allClear ? t("today.allClear") : t("today.oneThing")}
         right={
           <span className="inline-flex items-center gap-1 rounded-full border border-border2 bg-card px-3 py-1.5 text-xs font-semibold text-green">
-            <Zap className="size-3.5" /> {state.energy ? t(state.energy === "low" ? "today.low" : state.energy === "okay" ? "today.okay" : "today.high") : t("today.checkIn")}
+            <Zap className="size-3.5" /> {state.energy ? t(state.energy === "low" ? "today.energyLow" : state.energy === "okay" ? "today.energyOkay" : "today.energyHigh") : t("today.checkIn")}
           </span>
         }
       />
 
       <div className="space-y-5 px-5">
-        {/* Day progress + gentle wins */}
-        <section aria-label={t("a11y.day")} className="space-y-2">
-          <div className="h-1.5 overflow-hidden rounded-full bg-card2">
-            <div
-              className="h-full rounded-full bg-teal transition-[width] duration-500"
-              style={{ width: `${today.length ? (doneCount / today.length) * 100 : 0}%` }}
-            />
-          </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">{t("today.handled", { done: doneCount, total: today.length })}</span>
-            <span className="inline-flex items-center gap-1 font-semibold text-green">
-              <Sparkles className="size-3.5" /> {t(wins === 1 ? "today.win" : "today.wins", { n: wins })}
-            </span>
+        <section aria-label={t("today.energyQ")} className="space-y-2">
+          <p className="text-sm font-semibold">{t("today.energyQ")}</p>
+          <div className="flex items-center gap-2">
+            {(["low", "okay", "high"] as Energy[]).map((e) => (
+              <button
+                key={e}
+                type="button"
+                aria-pressed={state.energy === e}
+                onClick={() => setEnergy(e)}
+                className={cn(
+                  "flex-1 rounded-full border px-3 py-2 text-xs font-semibold transition-colors",
+                  state.energy === e
+                    ? "border-blue/60 bg-blue/15 text-blue"
+                    : "border-border2 bg-card text-muted-foreground hover:bg-card2",
+                )}
+              >
+                {t(e === "low" ? "today.energyLow" : e === "okay" ? "today.energyOkay" : "today.energyHigh")}
+              </button>
+            ))}
           </div>
         </section>
 
-        {/* Energy check-in */}
-        <section aria-label={t("today.battery")} className="flex items-center gap-2">
-          <span className="mr-1 text-xs text-dim">{t("today.battery")}</span>
-          {(["low", "okay", "high"] as Energy[]).map((e) => (
-            <button
-              key={e}
-              type="button"
-              aria-pressed={state.energy === e}
-              onClick={() => setEnergy(e)}
-              className={cn(
-                "flex-1 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
-                state.energy === e
-                  ? "border-blue/60 bg-blue/15 text-blue"
-                  : "border-border2 bg-card text-muted-foreground hover:bg-card2",
-              )}
-            >
-              {t(e === "low" ? "today.low" : e === "okay" ? "today.okay" : "today.high")}
-            </button>
-          ))}
+        <section aria-label={t("a11y.day")} className="space-y-2">
+          <button type="button" aria-expanded={completedOpen} onClick={() => setCompletedOpen((v) => !v)} className="w-full space-y-2 text-left">
+            <div className="h-1.5 overflow-hidden rounded-full bg-card2">
+              <div
+                className="h-full rounded-full bg-teal transition-[width] duration-500"
+                style={{ width: `${today.length ? (doneCount / today.length) * 100 : 0}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="inline-flex items-center gap-1 text-muted-foreground">
+                <ChevronDown className={cn("size-3.5 transition-transform", completedOpen && "rotate-180")} aria-hidden />
+                {t("today.handled", { done: doneCount, total: today.length })}
+              </span>
+              <span className="inline-flex items-center gap-1 font-semibold text-green">
+                <Sparkles className="size-3.5" /> {t(wins === 1 ? "today.win" : "today.wins", { n: wins })}
+              </span>
+            </div>
+          </button>
+          {completedOpen && (
+            <div className="space-y-2">
+              <h2 className="px-1 text-sm font-semibold">{t("today.completed")}</h2>
+              {completed.length === 0 && <p className="rounded-2xl border border-border bg-bg2 px-4 py-3 text-sm text-dim">{t("today.completedEmpty")}</p>}
+              {completed.map((ev) => (
+                <EventRow key={ev.id} ev={ev} />
+              ))}
+            </div>
+          )}
         </section>
 
         {up ? <UpNext ev={up} now={now} /> : <AllClearCard />}

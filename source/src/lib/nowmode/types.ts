@@ -37,6 +37,14 @@ export interface NowEvent {
    * Missing on older saves is treated as fixed.
    */
   schedule: ScheduleType;
+  /** Series this event was generated from. Missing means a one-off. */
+  seriesId?: string;
+  /** Original series date (YYYY-MM-DD). Stays put if this one time is moved. */
+  occurrenceKey?: string;
+  /** Edited on its own, so a series change does not overwrite it. */
+  exception?: boolean;
+  /** Board note this event was scheduled from. The note itself stays on the Board. */
+  sourceCardId?: string;
 }
 
 export interface BoardCard {
@@ -70,6 +78,47 @@ export interface Prefs {
   quietEnd?: string;
   themeMode?: "light" | "dark";
   palette?: "ocean" | "lavender" | "forest";
+  /** Display name chosen by the person. Never translated. */
+  username?: string;
+  /** Legal or everyday name, shown under the username. Never translated. */
+  realName?: string;
+  /** Compressed data URL, this device only. */
+  avatar?: string;
+  /** Which saved name the Today greeting uses. */
+  greetAs?: "username" | "realName";
+  /** Daily Board review. Off until the person turns it on. */
+  boardReviewOn?: boolean;
+  /** Set only after they pick a clock time. Otherwise the time stays 90 minutes before quiet hours start. */
+  boardReviewTime?: string;
+  boardReviewManual?: boolean;
+}
+
+export type RecurrenceFreq = "daily" | "weekly" | "monthly" | "custom";
+
+export interface RecurrenceRule {
+  id: string;
+  freq: RecurrenceFreq;
+  /** 0 Sunday … 6 Saturday. */
+  weekdays: number[];
+  /** 1–31. A month that lacks the date is skipped, not shifted. */
+  monthDays: number[];
+  /** Custom series pick weekdays or dates of the month, not both. */
+  customBy: "weekdays" | "monthDays";
+  /** Inclusive YYYY-MM-DD. */
+  start: string;
+  /** Inclusive YYYY-MM-DD. Missing means no end. */
+  end?: string;
+  /** Wall-clock HH:MM. Not an absolute instant, so daylight saving does not move it. */
+  time: string;
+  duration: number;
+  schedule: ScheduleType;
+  title: string;
+  tag: string;
+  color: EventColor;
+  nudges: Nudges;
+  /** Dates removed on purpose. They are not generated again. */
+  skips: string[];
+  sourceCardId?: string;
 }
 
 export interface Win {
@@ -100,6 +149,8 @@ export interface FocusState {
   customMinutes?: number;
   /** Wall-clock deadline already announced, so the same end doesn't chime twice. */
   alarmedAt: number | null;
+  /** True after the person types a session name. Otherwise the preset name is translated at display time. */
+  nameEdited?: boolean;
   /** When true, the countdown deadline is the linked event's end, not a free-floating preset. */
   linkedToBlock: boolean;
   /** Event end (epoch ms) whose Finish / Extend prompt is open. */
@@ -116,4 +167,6 @@ export interface AppState {
   wins: Win[];
   focus: FocusState;
   firedNudges: string[];
+  /** Recurring habits and appointment reminders. Missing on older saves means none. */
+  series?: RecurrenceRule[];
 }

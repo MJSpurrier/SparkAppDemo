@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Clock3, Minus, Pause, Play, Plus, RotateCcw, UsersRound } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Loading } from "@/components/nowmode/Loading";
 import { Ring } from "@/components/nowmode/Ring";
@@ -10,6 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { useLocale, useT } from "@/lib/i18n/context";
 import { formatLocaleTime } from "@/lib/i18n/format";
 import { alarmCanPlay, playBlockChime, unlockAlarm } from "@/lib/nowmode/alarm";
+import { focusWinLabel } from "@/lib/nowmode/profile";
 import { parseCustomDuration, splitCustomMinutes } from "@/lib/nowmode/settings";
 import { formatMMSS } from "@/lib/nowmode/logic";
 import { eventEndClock, parseMinutesInput, scheduleOf } from "@/lib/nowmode/schedule";
@@ -38,6 +39,46 @@ const PRESET_KEYS = {
   custom: "focus.preset.custom",
 } as const;
 
+function SessionTitle({
+  linked,
+  label,
+  edited,
+  onName,
+}: {
+  linked: boolean;
+  label: string;
+  edited: boolean;
+  onName: (value: string) => void;
+}) {
+  const t = useT();
+  const [draft, setDraft] = useState(label);
+  useEffect(() => {
+    if (!edited) setDraft(label);
+  }, [edited, label]);
+  return (
+    <div className="mt-5 text-center">
+      <p className="text-sm text-muted-foreground">{t("focus.amplifying")}</p>
+      {linked ? (
+        <h1 className="mt-1 px-6 text-[22px] font-bold leading-tight">{label || t("focus.fallback")}</h1>
+      ) : (
+        <label className="mt-1 block px-6">
+          <span className="sr-only">{t("focus.name")}</span>
+          <input
+            value={edited ? label : draft}
+            placeholder={t("focus.namePh")}
+            aria-label={t("focus.name")}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              onName(e.target.value);
+            }}
+            className="w-full bg-transparent text-center text-[22px] font-bold leading-tight text-foreground outline-none placeholder:text-dim"
+          />
+        </label>
+      )}
+    </div>
+  );
+}
+
 function FocusScreen() {
   const {
     ready,
@@ -46,6 +87,7 @@ function FocusScreen() {
     setCustomMin,
     setCustomParts,
     startFocus,
+    setFocusLabel,
     pauseFocus,
     resumeFocus,
     resetFocus,
@@ -149,14 +191,7 @@ function FocusScreen() {
         />
       )}
 
-      <div className="mt-5 text-center">
-        <p className="text-sm text-muted-foreground">{t("focus.amplifying")}</p>
-        <h1 className="mt-1 px-6 text-[22px] font-bold leading-tight">
-          {linked || !PRESET_KEYS[f.presetId as keyof typeof PRESET_KEYS]
-            ? f.label || t("focus.fallback")
-            : t(PRESET_KEYS[f.presetId as keyof typeof PRESET_KEYS])}
-        </h1>
-      </div>
+      <SessionTitle linked={linked} label={linked ? linkedEvent?.title || f.label : focusWinLabel(f, t)} edited={!!f.nameEdited} onName={setFocusLabel} />
 
       <div className="relative mx-auto mt-6 grid place-items-center">
         {f.bodyDouble && (

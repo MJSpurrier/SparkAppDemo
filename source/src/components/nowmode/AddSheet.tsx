@@ -11,6 +11,9 @@ import { addDays, nextHalfHour, parseCapture, toDateKey } from "@/lib/nowmode/lo
 import { parseMinutesInput, validateSlot } from "@/lib/nowmode/schedule";
 import { useNowMode } from "@/lib/nowmode/store";
 import type { ScheduleType } from "@/lib/nowmode/types";
+import { dateKey } from "@/lib/nowmode/recurrence";
+import { recurrenceReady, ruleFromDraft } from "@/lib/nowmode/recurrence";
+import { RecurrenceEditor, type RecurrenceDraft } from "./RecurrenceEditor";
 import { ScheduleTypeField } from "./ScheduleTypeField";
 import { useUI, type SheetTab } from "./ui-context";
 
@@ -138,64 +141,115 @@ export function AddSheet() {
 function TextCapture() {
   const t = useT();
   const locale = useLocale();
-  const { addEvent, addCard } = useNowMode();
-  const { sheetMode, closeSheet } = useUI();
-  const [text, setText] = useState("");
+  const { addEvent, addCard, addSeries, cardAlreadyPlanned } = useNowMode();
+  const { sheetMode, closeSheet, captureDraft } = useUI();
+  const [text, setText] = useState(captureDraft?.text ?? "");
   const [schedule, setSchedule] = useState<ScheduleType>("flexible");
   const [minutes, setMinutes] = useState("25");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [step, setStep] = useState<"date" | "time">("date");
+  const [recurring, setRecurring] = useState(false);
+  const [draft, setDraft] = useState<RecurrenceDraft>({ freq: "weekly", weekdays: [], monthDays: [], customBy: "weekdays", end: "" });
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const parsed = useMemo(() => parseCapture(text), [text]);
-  const boardOnly = sheetMode === "board";
+  const boardOnly = sheetMode === "board" && !captureDraft;
 
-  const save = () => {
-    if (!text.trim()) return;
-    if (boardOnly) {
-      addCard({ kind: "text", text: text.trim() });
-      toast(t("capture.pinned"));
+  const place = (kind: "today" | "schedule" | "board") => {
+    if (busy || !text.trim()) return;
+    setBusy(true);
+    try {
+      if (kind === "board") {
+        addCard({ kind: "text", text: text.trim() });
+        toast(t("capture.pinned"), { description: t("capture.boardOnly") });
+        closeSheet();
+        return;
+      }
+      if (captureDraft && cardAlreadyPlanned(captureDraft.cardId)) {
+        toast(t("capture.dup"));
+        closeSheet();
+        return;
+      }
+      const length = parseMinutesInput(minutes);
+      if (!length.ok) {
+        setError(explainScheduleError(locale, length));
+        return;
+      }
+      const now = new Date();
+      const chosenTime = time || parsed.time || nextHalfHour(now);
+      if (!time && kind === "today" && !parsed.time) setTime(chosenTime);
+      if (!chosenTime) {
+        setError(t("capture.needTime"));
+        return;
+      }
+      const chosenDate = kind === "today" ? toDateKey(now) : date;
+      if (kind === "schedule" && !date) {
+        setError(t("capture.needDate"));
+        return;
+      }
+      const slot = validateSlot({ date: chosenDate, time: chosenTime, duration: length.minutes });
+      if (!slot.ok) {
+        setError(explainScheduleError(locale, slot));
+        return;
+      }
+      const title = parsed.title || text.trim();
+      if (recurring) {
+        const rule = ruleFromDraft({
+          freq: draft.freq,
+          weekdays: draft.weekdays.length ? draft.weekdays : [new Date(`${chosenDate}T12:00:00`).getDay()],
+          monthDays: draft.monthDays.length ? draft.monthDays : [Number(chosenDate.slice(8))],
+          customBy: draft.customBy,
+          start: chosenDate,
+          end: draft.end || undefined,
+          time: chosenTime,
+          duration: length.minutes,
+          schedule,
+          title,
+          tag: "Capture",
+          color: "blue",
+          nudges: { day: false, hour: true, ten: true, now: true },
+          sourceCardId: captureDraft?.cardId,
+        });
+        if (!recurrenceReady(rule)) {
+          setError(t("recur.needDay"));
+          return;
+        }
+        addSeries(rule);
+      } else {
+        addEvent({
+          title,
+          date: chosenDate,
+          time: chosenTime,
+          duration: length.minutes,
+          tag: "Capture",
+          color: "blue",
+          schedule,
+          sourceCardId: captureDraft?.cardId,
+        });
+      }
+      toast(t("capture.saved"), {
+        description: t("capture.savedBody", {
+          when: chosenDate === toDateKey(now) ? t("capture.today") : chosenDate,
+          time: formatLocaleTime(chosenTime, locale),
+          kind: t(schedule === "fixed" ? "badge.fixed" : "badge.flexible"),
+        }),
+      });
       closeSheet();
-      return;
+    } finally {
+      setBusy(false);
     }
-    const length = parseMinutesInput(minutes);
-    if (!length.ok) {
-      setError(explainScheduleError(locale, length));
-      return;
-    }
-    const now = new Date();
-    const time = parsed.time ?? nextHalfHour(now);
-    const date = toDateKey(addDays(now, parsed.dayOffset));
-    const slot = validateSlot({ date, time, duration: length.minutes });
-    if (!slot.ok) {
-      setError(explainScheduleError(locale, slot));
-      return;
-    }
-    addEvent({
-      title: parsed.title,
-      date,
-      time,
-      duration: length.minutes,
-      tag: "Capture",
-      color: "blue",
-      schedule,
-    });
-    addCard({ kind: "text", text: text.trim() });
-    toast(t("capture.saved"), {
-      description: t("capture.savedBody", {
-        when: parsed.dayOffset ? t("capture.tomorrow") : t("capture.today"),
-        time: formatLocaleTime(time, locale),
-        kind: t(schedule === "fixed" ? "badge.fixed" : "badge.flexible"),
-      }),
-    });
-    closeSheet();
   };
 
   return (
     <form
       onSubmit={(e) => {
         e.preventDefault();
-        save();
+        place(boardOnly ? "board" : "today");
       }}
       className="space-y-3"
     >
+      <div className="max-h-[42vh] space-y-3 overflow-y-auto pr-1">
       <textarea
         autoFocus
         value={text}
@@ -204,16 +258,29 @@ function TextCapture() {
         placeholder={boardOnly ? t("capture.boardPh") : t("capture.ph")}
         className="w-full resize-none rounded-2xl border border-border2 bg-card px-4 py-3 text-[15px] placeholder:text-dim focus:border-blue focus:outline-none"
       />
-      {!boardOnly && text.trim() && (
-        <p className="rounded-xl bg-card px-3 py-2 text-xs text-muted-foreground">
-          → <span className="font-semibold text-foreground">{parsed.title}</span> ·{" "}
-          {parsed.dayOffset ? t("capture.tomorrow") : t("capture.today")} ·{" "}
-          <span className="text-blue">{parsed.time ? formatLocaleTime(parsed.time, locale) : t("capture.next")}</span>
-        </p>
-      )}
       {!boardOnly && (
         <>
-          <ScheduleTypeField value={schedule} onChange={setSchedule} name="capture-schedule" />
+          <ScheduleTypeField
+            value={schedule}
+            onChange={setSchedule}
+            name="capture-schedule"
+            extra={
+              <button
+                type="button"
+                aria-pressed={recurring}
+                onClick={() => {
+                  setRecurring((on) => !on);
+                  if (!draft.weekdays.length) {
+                    const seed = date || dateKey(new Date());
+                    setDraft((current) => ({ ...current, weekdays: [new Date(`${seed}T12:00:00`).getDay()], monthDays: [Number(seed.slice(8))] }));
+                  }
+                }}
+                className={`rounded-xl border px-2 py-2.5 text-center text-sm font-semibold ${recurring ? "border-blue/60 bg-blue/15 text-blue" : "border-border2 bg-card text-muted-foreground"}`}
+              >
+                {t("recur.button")}
+              </button>
+            }
+          />
           <label className="block text-xs font-semibold">
             {t("capture.length")}
             <input
@@ -226,16 +293,88 @@ function TextCapture() {
               className="mt-1 h-11 w-full rounded-xl border border-border2 bg-card px-3 text-sm font-medium focus:border-blue focus:outline-none"
             />
           </label>
+          <label className="block text-xs font-semibold">
+            {t("capture.pickTime")}
+            <input
+              type="time"
+              value={time}
+              onChange={(e) => {
+                setTime(e.target.value);
+                setError(null);
+              }}
+              className="mt-1 h-11 w-full rounded-xl border border-border2 bg-card px-3 text-sm font-medium focus:border-blue focus:outline-none"
+            />
+          </label>
+          <div className="space-y-2 rounded-2xl border border-border bg-card px-3 py-3">
+            <p className="text-xs font-semibold">{t("capture.scheduleBtn")}</p>
+            {step === "date" ? (
+              <label className="block text-xs font-semibold">
+                {t("capture.pickDate")}
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => {
+                    setDate(e.target.value);
+                    setError(null);
+                    if (e.target.value) setStep("time");
+                  }}
+                  className="mt-1 h-11 w-full rounded-xl border border-border2 bg-background px-3 text-sm"
+                />
+              </label>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">{date}</p>
+                <label className="block text-xs font-semibold">
+                  {t("capture.pickTime")}
+                  <input
+                    type="time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    className="mt-1 h-11 w-full rounded-xl border border-border2 bg-background px-3 text-sm"
+                  />
+                </label>
+                <button type="button" className="text-xs font-semibold text-blue" onClick={() => setStep("date")}>
+                  {t("capture.pickDate")}
+                </button>
+              </div>
+            )}
+          </div>
+          {recurring && (
+            <RecurrenceEditor
+              value={draft}
+              onChange={setDraft}
+              startLabel={`${t("recur.start")}: ${date || dateKey(new Date())}`}
+            />
+          )}
         </>
       )}
+      </div>
       {error && (
         <p role="alert" className="text-xs text-coral">
           {error}
         </p>
       )}
-      <Button type="submit" size="lg" className="h-12 w-full rounded-xl text-[15px] font-semibold" disabled={!text.trim()}>
-        {boardOnly ? t("capture.pin") : t("capture.addBoth")}
-      </Button>
+      <div className={boardOnly || captureDraft ? "grid grid-cols-1 gap-2" : "grid grid-cols-3 gap-2"}>
+        {boardOnly ? (
+          <Button type="submit" size="lg" className="h-12 rounded-xl whitespace-normal text-xs" disabled={!text.trim() || busy}>
+            {t("capture.toBoard")}
+          </Button>
+        ) : (
+          <>
+            <Button type="button" size="lg" className="h-12 rounded-xl whitespace-normal px-2 text-xs" disabled={!text.trim() || busy} onClick={() => place("today")}>
+              {t("capture.toToday")}
+            </Button>
+            <Button type="button" variant="secondary" size="lg" className="h-12 rounded-xl whitespace-normal px-2 text-xs" disabled={!text.trim() || busy || !date} onClick={() => place("schedule")}>
+              {t("capture.scheduleBtn")}
+            </Button>
+            {!captureDraft && (
+              <Button type="button" variant="secondary" size="lg" className="h-12 rounded-xl whitespace-normal px-2 text-xs" disabled={!text.trim() || busy} onClick={() => place("board")}>
+                {t("capture.toBoard")}
+              </Button>
+            )}
+          </>
+        )}
+      </div>
     </form>
   );
 }

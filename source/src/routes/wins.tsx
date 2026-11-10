@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Plus, Trophy } from "lucide-react";
-import { useState } from "react";
+import { ChevronDown, Plus, Trophy } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
 import { Loading } from "@/components/nowmode/Loading";
 import { ScreenHeader } from "@/components/nowmode/ScreenHeader";
@@ -9,6 +9,8 @@ import { useT, useLocale } from "@/lib/i18n/context";
 import { formatLocaleDate } from "@/lib/i18n/format";
 import { useNowMode } from "@/lib/nowmode/store";
 import type { Win } from "@/lib/nowmode/types";
+import { weekStartsOn, winInSpan, type WinSpan } from "@/lib/nowmode/wins";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/wins")({
   head: () => ({
@@ -19,49 +21,114 @@ export const Route = createFileRoute("/wins")({
 
 function WinsScreen() {
   const t = useT();
+  const locale = useLocale();
   const { ready, state } = useNowMode();
   const [open, setOpen] = useState(false);
+  const [span, setSpan] = useState<WinSpan>("all");
+  const [smallOpen, setSmallOpen] = useState(true);
+  const [bigOpen, setBigOpen] = useState(true);
   if (!ready) return <Loading />;
+  const now = new Date();
+  const weekStart = weekStartsOn(locale);
   const small = state.wins.filter((w) => (w.kind ?? "small") === "small");
   const big = state.wins.filter((w) => w.kind === "big");
+  const visible = (items: Win[]) => items.filter((win) => winInSpan(win.date, span, now, weekStart));
+  const spans: WinSpan[] = ["all", "week", "month", "year"];
 
   return (
     <div className="pb-8">
       <ScreenHeader back title={t("wins.title")} />
-      <div className="space-y-6 px-5">
+      <div className="space-y-5 px-5">
         <p className="text-sm leading-relaxed text-muted-foreground">{t("wins.intro")}</p>
+        <div className="grid grid-cols-4 gap-1 rounded-2xl border border-border bg-card p-1" role="radiogroup" aria-label={t("wins.span.all")}>
+          {spans.map((item) => (
+            <button
+              key={item}
+              type="button"
+              role="radio"
+              aria-checked={span === item}
+              onClick={() => setSpan(item)}
+              className={cn(
+                "rounded-xl px-1 py-2 text-[11px] font-semibold",
+                span === item ? "bg-blue/15 text-blue" : "text-muted-foreground",
+              )}
+            >
+              {t(item === "all" ? "wins.span.all" : item === "week" ? "wins.span.week" : item === "month" ? "wins.span.month" : "wins.span.year")}
+            </button>
+          ))}
+        </div>
         {state.wins.length === 0 && (
           <p className="rounded-2xl border border-border bg-card px-4 py-5 text-sm leading-relaxed text-muted-foreground">{t("wins.empty")}</p>
         )}
-        <WinList title={t("wins.small")} empty={t("wins.smallEmpty")} items={small} />
-        <section className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">{t("wins.big")}</h2>
+        <WinGroup
+          title={t("wins.small")}
+          total={small.length}
+          items={visible(small)}
+          empty={span === "all" ? t("wins.smallEmpty") : t("wins.filterEmpty")}
+          expanded={smallOpen}
+          onToggle={() => setSmallOpen((v) => !v)}
+        />
+        <WinGroup
+          title={t("wins.big")}
+          total={big.length}
+          items={visible(big)}
+          empty={span === "all" ? t("wins.bigEmpty") : t("wins.filterEmpty")}
+          expanded={bigOpen}
+          onToggle={() => setBigOpen((v) => !v)}
+          gold
+          action={
             <Button size="sm" className="h-9 rounded-xl" onClick={() => setOpen(true)}>
               <Plus /> {t("wins.add")}
             </Button>
-          </div>
-          {big.length === 0 && <p className="rounded-2xl border border-border bg-bg2 px-4 py-3 text-sm text-dim">{t("wins.bigEmpty")}</p>}
-          {big.map((win) => (
-            <WinCard key={win.id} win={win} big />
-          ))}
-        </section>
+          }
+        />
       </div>
       {open && <BigWinForm onClose={() => setOpen(false)} />}
     </div>
   );
 }
 
-function WinList({ title, empty, items }: { title: string; empty: string; items: Win[] }) {
+function WinGroup({
+  title,
+  total,
+  items,
+  empty,
+  expanded,
+  onToggle,
+  gold = false,
+  action,
+}: {
+  title: string;
+  total: number;
+  items: Win[];
+  empty: string;
+  expanded: boolean;
+  onToggle: () => void;
+  gold?: boolean;
+  action?: ReactNode;
+}) {
+  const t = useT();
   return (
     <section className="space-y-2">
-      <h2 className="flex items-center gap-2 text-sm font-semibold">
-        <Trophy className="size-4 text-teal" aria-hidden /> {title}
-      </h2>
-      {items.length === 0 && <p className="rounded-2xl border border-border bg-bg2 px-4 py-3 text-sm text-dim">{empty}</p>}
-      {items.map((win) => (
-        <WinCard key={win.id} win={win} />
-      ))}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-label={t(expanded ? "wins.collapse" : "wins.expand", { title })}
+          onClick={onToggle}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <Trophy className={cn("size-4 shrink-0", gold ? "trophy-gold" : "text-teal")} aria-hidden />
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold">{title}</span>
+            <span className="block text-[11px] text-dim">{t("wins.total", { n: total })}</span>
+          </span>
+          <ChevronDown className={cn("size-4 shrink-0 text-dim transition-transform", expanded && "rotate-180")} aria-hidden />
+        </button>
+        {action}
+      </div>
+      {expanded && items.length === 0 && <p className="rounded-2xl border border-border bg-bg2 px-4 py-3 text-sm text-dim">{empty}</p>}
+      {expanded && items.map((win) => <WinCard key={win.id} win={win} />)}
     </section>
   );
 }

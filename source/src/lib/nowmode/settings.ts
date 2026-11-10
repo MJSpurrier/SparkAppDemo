@@ -25,6 +25,23 @@ export function isQuietAt(now: Date, start: string, end: string): boolean {
   return cur >= from || cur < to;
 }
 
+/** Clock time `leadMin` minutes before quiet hours start, wrapping past midnight. */
+export function reviewTimeBefore(quietStart: string, leadMin = 90): string {
+  const mins = minutesOfDay(quietStart) ?? minutesOfDay(DEFAULT_QUIET_START) ?? 22 * 60;
+  const next = (mins - leadMin + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(next / 60)).padStart(2, "0")}:${String(next % 60).padStart(2, "0")}`;
+}
+
+/** Manual choice wins. Otherwise stay 90 minutes before the saved quiet-hours start. */
+export function effectiveBoardReviewTime(prefs: Pick<Prefs, "quietStart" | "boardReviewTime" | "boardReviewManual">): string {
+  const anchor = prefs.quietStart && minutesOfDay(prefs.quietStart) != null ? prefs.quietStart : DEFAULT_QUIET_START;
+  if (prefs.boardReviewManual && prefs.boardReviewTime && minutesOfDay(prefs.boardReviewTime) != null) {
+    const mins = minutesOfDay(prefs.boardReviewTime)!;
+    return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+  }
+  return reviewTimeBefore(anchor);
+}
+
 export function quietRangeError(start: string, end: string): "invalid" | "equal" | null {
   if (minutesOfDay(start) == null || minutesOfDay(end) == null) return "invalid";
   if (start.trim() === end.trim()) return "equal";

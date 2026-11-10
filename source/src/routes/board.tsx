@@ -4,9 +4,12 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 import { toast } from "sonner";
 
 import { useT } from "@/lib/i18n/context";
+import { formatLocaleTime } from "@/lib/i18n/format";
+import { useLocale } from "@/lib/i18n/context";
 import { Loading } from "@/components/nowmode/Loading";
 import { Pill, ScreenHeader } from "@/components/nowmode/ScreenHeader";
 import { useUI } from "@/components/nowmode/ui-context";
+import { DEFAULT_QUIET_START, effectiveBoardReviewTime } from "@/lib/nowmode/settings";
 import { useNowMode } from "@/lib/nowmode/store";
 import type { BoardCard } from "@/lib/nowmode/types";
 import { cn } from "@/lib/utils";
@@ -41,11 +44,13 @@ interface Drag {
 function BoardScreen() {
   const t = useT();
   const { ready, state, moveCard, removeCard, addLink, removeLink } = useNowMode();
-  const { openSheet } = useUI();
+  const { openSheet, openCardSchedule } = useUI();
+  const locale = useLocale();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
-  const [connect, setConnect] = useState(false);
+  const [mode, setMode] = useState<null | "add" | "remove">(null);
   const [pending, setPending] = useState<string | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
 
@@ -61,7 +66,7 @@ function BoardScreen() {
   };
 
   const onDown = (e: ReactPointerEvent<HTMLDivElement>, c: BoardCard) => {
-    if (connect) return;
+    if (mode) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const p = local(e);
     setDrag({ id: c.id, offX: p.x - c.x, offY: p.y - c.y, x: c.x, y: c.y, startX: p.x, startY: p.y, moved: false });
@@ -85,12 +90,11 @@ function BoardScreen() {
     setDrag(null);
   };
 
+  const linkBetween = (a: string, b: string) =>
+    state.links.find((link) => (link.from === a && link.to === b) || (link.from === b && link.to === a));
+
   const tapPin = (id: string) => {
-    if (!connect) {
-      setConnect(true);
-      setPending(id);
-      return;
-    }
+    if (!mode) return;
     if (!pending) {
       setPending(id);
       return;
@@ -99,8 +103,22 @@ function BoardScreen() {
       setPending(null);
       return;
     }
+    if (mode === "remove") {
+      const link = linkBetween(pending, id);
+      if (link) {
+        removeLink(link.id);
+        toast(t("board.stringRemoved"));
+      }
+      setPending(null);
+      return;
+    }
     const ok = addLink(pending, id);
     toast(ok ? t("board.connected") : t("board.already"), { description: ok ? t("board.tied") : undefined });
+    setPending(null);
+  };
+
+  const exitMode = () => {
+    setMode(null);
     setPending(null);
   };
 
@@ -110,10 +128,13 @@ function BoardScreen() {
 
       <div className="relative mx-5 min-h-0 flex-1 overflow-hidden rounded-[20px] border border-border2 bg-cork shadow-card">
         <div className="cork-grain pointer-events-none absolute inset-0" />
-        {connect && (
-          <p className="absolute inset-x-0 top-2 z-30 mx-auto w-fit rounded-full bg-ink/80 px-3 py-1 text-[11px] font-semibold text-foreground">
-            {pending ? t("board.second") : t("board.start")}
-          </p>
+        {mode && (
+          <div className="absolute inset-x-3 top-2 z-30 flex items-center justify-between gap-2 rounded-full bg-ink/80 px-3 py-1 text-[11px] font-semibold text-foreground">
+            <span>{mode === "remove" ? t("board.removeMode") : pending ? t("board.second") : t("board.start")}</span>
+            <button type="button" onClick={exitMode} className="underline">
+              {t("board.cancelMode")}
+            </button>
+          </div>
         )}
         <div className="no-scrollbar h-full overflow-auto">
           <div
@@ -202,8 +223,8 @@ function BoardScreen() {
                       fill="none"
                       strokeWidth={16}
                       stroke="transparent"
-                      className={cn(!connect && "cursor-pointer")}
-                      style={{ pointerEvents: connect ? "none" : "stroke" }}
+                      className={cn(mode !== "add" && "cursor-pointer")}
+                      style={{ pointerEvents: mode === "add" ? "none" : "stroke" }}
                       onClick={() => {
                         removeLink(l.id);
                         toast(t("board.stringRemoved"), {
@@ -234,7 +255,7 @@ function BoardScreen() {
                   <span
                     className={cn(
                       "block size-3.5 rounded-full bg-string shadow-[inset_-2px_-2px_0_oklch(0_0_0/0.25)] ring-1 ring-ink/40 transition-transform",
-                      connect && "scale-110",
+                      mode === "add" && "scale-110",
                       isPending && "scale-150 ring-2 ring-cream",
                     )}
                   />
@@ -255,17 +276,17 @@ function BoardScreen() {
         </button>
         <button
           type="button"
-          aria-pressed={connect}
+          aria-pressed={mode != null}
           onClick={() => {
-            setConnect((v) => !v);
             setPending(null);
+            setMode((current) => (current === "add" ? "remove" : "add"));
           }}
           className={cn(
-            "inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border text-sm font-semibold transition-colors",
-            connect ? "border-string/70 bg-string/15 text-foreground" : "border-border2 bg-card text-foreground",
+            "inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border px-2 text-sm font-semibold transition-colors",
+            mode ? "border-string/70 bg-string/15 text-foreground" : "border-border2 bg-card text-foreground",
           )}
         >
-          <Link2 className="size-4" /> {connect ? t("board.done") : t("board.connect")}
+          <Link2 className="size-4 shrink-0" /> {mode === "add" ? t("board.disconnect") : t("board.connect")}
         </button>
         <button
           type="button"
@@ -273,6 +294,66 @@ function BoardScreen() {
           className="inline-flex h-11 items-center justify-center gap-1.5 rounded-xl border border-border2 bg-card text-sm font-semibold"
         >
           {scale === 1 ? <ZoomOut className="size-4" /> : <ZoomIn className="size-4" />} {t("board.zoom")}
+        </button>
+      </div>
+      <div className="flex gap-2 px-5 pb-3">
+        {selected && (
+          <button
+            type="button"
+            onClick={() => {
+              const card = state.cards.find((item) => item.id === selected);
+              if (card) openCardSchedule(card.text, card.id);
+            }}
+            className="h-10 flex-1 rounded-xl border border-border2 bg-card text-xs font-semibold"
+          >
+            {t("capture.scheduleCard")}
+          </button>
+        )}
+        <button type="button" onClick={() => setReviewOpen(true)} className="h-10 flex-1 rounded-xl border border-border2 bg-card text-xs font-semibold">
+          {t("board.review")}
+        </button>
+      </div>
+      {reviewOpen && <ReviewSheet onClose={() => setReviewOpen(false)} />}
+    </div>
+  );
+}
+
+function ReviewSheet({ onClose }: { onClose: () => void }) {
+  const t = useT();
+  const locale = useLocale();
+  const { state, setPrefs } = useNowMode();
+  const anchor = state.prefs.quietStart ?? DEFAULT_QUIET_START;
+  const effective = effectiveBoardReviewTime(state.prefs);
+  return (
+    <div className="absolute inset-0 z-30" role="dialog" aria-modal="true" aria-labelledby="review-title">
+      <button type="button" aria-label={t("common.cancel")} className="absolute inset-0 bg-ink/70" onClick={onClose} />
+      <div className="absolute inset-x-0 bottom-0 space-y-3 rounded-t-3xl border-x border-t border-border2 bg-bg2 px-5 pb-6 pt-4">
+        <h2 id="review-title" className="text-lg font-bold">{t("board.reviewTitle")}</h2>
+        <p className="text-sm text-muted-foreground">{t("board.reviewBody")}</p>
+        <label className="flex items-center justify-between gap-3 text-sm font-semibold">
+          {t("board.reviewOn")}
+          <input
+            type="checkbox"
+            checked={!!state.prefs.boardReviewOn}
+            onChange={(e) => setPrefs({ boardReviewOn: e.target.checked })}
+            className="size-5"
+          />
+        </label>
+        <label className="block text-xs font-semibold">
+          {t("board.reviewTime")}
+          <input
+            type="time"
+            value={effective}
+            onChange={(e) => setPrefs({ boardReviewManual: true, boardReviewTime: e.target.value })}
+            className="mt-1 h-11 w-full rounded-xl border border-border2 bg-card px-3 text-sm"
+          />
+        </label>
+        <button type="button" className="text-xs font-semibold text-blue" onClick={() => setPrefs({ boardReviewManual: false, boardReviewTime: undefined })}>
+          {t("board.reviewDefault", { time: formatLocaleTime(effectiveBoardReviewTime({ quietStart: anchor }), locale) })}
+        </button>
+        <p className="text-[11px] leading-relaxed text-dim">{t("board.reviewLimit")}</p>
+        <button type="button" onClick={onClose} className="h-11 w-full rounded-xl bg-primary text-sm font-semibold text-primary-foreground">
+          {t("common.close")}
         </button>
       </div>
     </div>

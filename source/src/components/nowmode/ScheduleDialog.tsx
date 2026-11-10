@@ -29,13 +29,15 @@ export function ScheduleDialog() {
 function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => void }) {
   const t = useT();
   const locale = useLocale();
-  const { state, commitSchedule } = useNowMode();
+  const { state, commitSchedule, skipOccurrence, deleteSeries } = useNowMode();
   const ev = state.events.find((e) => e.id === eventId);
   const [date, setDate] = useState(ev?.date ?? "");
   const [time, setTime] = useState(ev?.time ?? "");
   const [duration, setDuration] = useState(String(ev?.duration ?? 30));
   const [schedule, setSchedule] = useState<ScheduleType>(ev ? scheduleOf(ev) : "fixed");
   const [error, setError] = useState<string | null>(null);
+  const [scope, setScope] = useState<"one" | "series">("one");
+  const [confirm, setConfirm] = useState<null | "one" | "series">(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -67,7 +69,7 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
       setError(explainScheduleError(locale, valid));
       return;
     }
-    const result = commitSchedule(ev.id, { date, time, duration: parsedDuration, schedule });
+    const result = commitSchedule(ev.id, { date, time, duration: parsedDuration, schedule, scope: ev.seriesId ? scope : "one" });
     if (!result.ok) {
       setError(explainScheduleError(locale, result));
       return;
@@ -96,6 +98,26 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
           }}
         >
           <ScheduleTypeField value={schedule} onChange={setSchedule} name={`schedule-${ev.id}`} />
+          {ev.seriesId && (
+            <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t("recur.scopeSeries")}>
+                {(["one", "series"] as const).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    role="radio"
+                    aria-checked={scope === item}
+                    onClick={() => setScope(item)}
+                    className={`rounded-xl border px-2 py-2 text-xs font-semibold ${scope === item ? "border-blue/60 bg-blue/15 text-blue" : "border-border2 text-muted-foreground"}`}
+                  >
+                    {t(item === "one" ? "recur.scopeOne" : "recur.scopeSeries")}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] leading-relaxed text-dim">{t("recur.seriesNote")}</p>
+              <p className="text-[11px] leading-relaxed text-dim">{t("recur.monthNote")}</p>
+            </div>
+          )}
 
           <label className="block text-xs font-semibold">
             {t("schedule.date")}
@@ -153,6 +175,38 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
             </p>
           )}
 
+          {ev.seriesId && (
+            <div className="grid grid-cols-2 gap-2">
+              <Button type="button" variant="secondary" className="h-10 rounded-xl" onClick={() => setConfirm("one")}>
+                {t("recur.deleteOne")}
+              </Button>
+              <Button type="button" variant="secondary" className="h-10 rounded-xl" onClick={() => setConfirm("series")}>
+                {t("recur.deleteSeries")}
+              </Button>
+            </div>
+          )}
+          {confirm && (
+            <div role="alert" className="rounded-xl border border-coral/40 bg-coral/10 px-3 py-2">
+              <p className="text-xs leading-relaxed">{confirm === "series" ? t("recur.deleteConfirm") : t("recur.deleteOneConfirm")}</p>
+              <div className="mt-2 flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 rounded-lg"
+                  onClick={() => {
+                    if (confirm === "series" && ev.seriesId) deleteSeries(ev.seriesId);
+                    else skipOccurrence(ev.id);
+                    onClose();
+                  }}
+                >
+                  {t("recur.confirm")}
+                </Button>
+                <Button type="button" size="sm" variant="ghost" className="h-8 rounded-lg" onClick={() => setConfirm(null)}>
+                  {t("common.cancel")}
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3 pt-1">
             <Button type="button" variant="secondary" size="lg" className="h-12 rounded-xl" onClick={onClose}>
               {t("common.cancel")}
