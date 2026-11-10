@@ -30,13 +30,13 @@ npm run cap:ios        # sync, then open Xcode (Mac only)
 
 `open:android` and `open:ios` open the native projects without rebuilding.
 
-Icons and splash screens come from `source/resources/icon.png` and `source/resources/splash.png` (the ring mark). Regenerate them with:
+Icons and splash screens come from `source/resources/icon-source.png` (the neon brain). The generated full-bleed square is `icon-only.png`, the adaptive foreground is `icon-foreground.png`, and the splash is centered on the same near-black. Regenerate them with:
 
 ```sh
 node scripts/make-brand-assets.mjs
 npx @capacitor/assets generate --android --ios \
-  --iconBackgroundColor '#102838' --iconBackgroundColorDark '#0F1419' \
-  --splashBackgroundColor '#0F1419' --splashBackgroundColorDark '#0F1419'
+  --iconBackgroundColor '#121117' --iconBackgroundColorDark '#121117' \
+  --splashBackgroundColor '#121117' --splashBackgroundColorDark '#121117'
 ```
 
 The five reminder tones are `source/resources/sounds/*.wav`, copied to `android/app/src/main/res/raw/` and into the iOS app bundle. An imported sound cannot be bundled ahead of time, so the phone plays its default tone for that choice.
