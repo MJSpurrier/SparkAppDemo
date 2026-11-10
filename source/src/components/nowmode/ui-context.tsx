@@ -24,6 +24,8 @@ interface UIState {
   closeSteps: () => void;
   captureDraft: { text: string; cardId: string } | null;
   openCardSchedule: (text: string, cardId: string) => void;
+  tutorialNonce: number;
+  startTutorial: () => void;
 }
 
 const UICtx = createContext<UIState | null>(null);
@@ -37,6 +39,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
   const [timerRequest, setTimerRequest] = useState<TimerRequest>(null);
   const [stepsEventId, setStepsEventId] = useState<string | null>(null);
   const [captureDraft, setCaptureDraft] = useState<{ text: string; cardId: string } | null>(null);
+  const [tutorialNonce, setTutorialNonce] = useState(0);
 
   const value = useMemo<UIState>(
     () => ({
@@ -72,8 +75,14 @@ export function UIProvider({ children }: { children: ReactNode }) {
       stepsEventId,
       openSteps: (id: string) => setStepsEventId(id),
       closeSteps: () => setStepsEventId(null),
+      tutorialNonce,
+      startTutorial: () => {
+        setDrawerOpen(false);
+        setSheetOpen(false);
+        setTutorialNonce((n) => n + 1);
+      },
     }),
-    [drawerOpen, sheetOpen, sheetMode, sheetTab, scheduleEventId, timerRequest, stepsEventId, captureDraft],
+    [drawerOpen, sheetOpen, sheetMode, sheetTab, scheduleEventId, timerRequest, stepsEventId, captureDraft, tutorialNonce],
   );
 
   return <UICtx.Provider value={value}>{children}</UICtx.Provider>;

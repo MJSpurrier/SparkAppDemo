@@ -90,7 +90,7 @@ function BoardScreen() {
     <div className="flex h-full flex-col">
       <ScreenHeader title={t("nav.board")} right={<Pill>{t("board.hint")}</Pill>} />
 
-      <div className="relative mx-5 min-h-0 flex-1 overflow-hidden rounded-[20px] border border-border2 bg-cork shadow-card">
+      <div data-tour="board" className="relative mx-5 min-h-0 flex-1 overflow-hidden rounded-[20px] border border-border2 bg-cork shadow-card">
         <div className="cork-grain pointer-events-none absolute inset-0" />
         <div className="no-scrollbar h-full overflow-auto">
           <div

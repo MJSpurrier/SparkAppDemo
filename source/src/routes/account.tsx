@@ -66,7 +66,7 @@ function ProfileCard() {
   const prefs = state.prefs;
   const name = greetingName(prefs);
   return (
-    <section className="space-y-3 rounded-[20px] border border-border2 bg-hero p-5">
+    <section data-tour="account" className="space-y-3 rounded-[20px] border border-border2 bg-hero p-5">
       <div className="flex items-center gap-4">
         <Avatar prefs={prefs} size="size-14 text-xl" />
         <div className="min-w-0">
@@ -282,7 +282,7 @@ function Account() {
 
         <SoundSettings />
 
-        <section>
+        <section data-tour="settings">
           <h2 className="px-1 pb-2 text-[11px] font-bold uppercase tracking-wider text-dim">{t("account.section")}</h2>
           <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
             <SettingRow

@@ -95,6 +95,8 @@ export interface Prefs {
   alarmSound?: string;
   /** 0–100. Missing means 60. */
   alarmVolume?: number;
+  /** Set when the person finishes or skips the tour. Missing does not mean they should see it. */
+  tutorialDone?: boolean;
 }
 
 export type RecurrenceFreq = "daily" | "weekly" | "monthly" | "custom";

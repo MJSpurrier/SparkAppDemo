@@ -63,10 +63,18 @@ export type ExtendResult =
 
 export type ScheduleInput = SlotInput & { schedule: ScheduleType; scope?: "one" | "series" };
 
+let savedOnLoad = false;
+
+/** True when this visit opened an existing nowmode-v1 blob. First-run seed is false. */
+export function hadSavedNowMode(): boolean {
+  return savedOnLoad;
+}
+
 function load(): AppState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
+      savedOnLoad = true;
       const migrated = migrateAppState(JSON.parse(raw));
       if (migrated) {
         return { ...migrated, events: materializeSeries(migrated.events, migrated.series ?? [], new Date()) };

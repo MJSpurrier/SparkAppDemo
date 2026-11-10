@@ -78,7 +78,7 @@ function Today() {
       />
 
       <div className="space-y-5 px-5">
-        <section aria-label={t("today.energyQ")} className="space-y-2">
+        <section data-tour="today-energy" aria-label={t("today.energyQ")} className="space-y-2">
           <p className="text-sm font-semibold">{t("today.energyQ")}</p>
           <div className="flex items-center gap-2">
             {(["low", "okay", "high"] as Energy[]).map((e) => (
@@ -100,7 +100,7 @@ function Today() {
           </div>
         </section>
 
-        <section aria-label={t("a11y.day")} className="space-y-2">
+        <section data-tour="today-done" aria-label={t("a11y.day")} className="space-y-2">
           <button type="button" aria-expanded={completedOpen} onClick={() => setCompletedOpen((v) => !v)} className="w-full space-y-2 text-left">
             <div className="h-1.5 overflow-hidden rounded-full bg-card2">
               <div
@@ -324,7 +324,7 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
       : 1;
 
   return (
-    <section aria-label={t("today.upNext")} className="rounded-[20px] border border-border2 bg-hero p-5 shadow-card">
+    <section data-tour="today-next" aria-label={t("today.upNext")} className="rounded-[20px] border border-border2 bg-hero p-5 shadow-card">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-blue">{t("today.upNext")}</p>
         <TypeBadge schedule={ev.schedule} />

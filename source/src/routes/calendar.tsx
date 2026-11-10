@@ -70,7 +70,7 @@ function CalendarScreen() {
             <span key={i}>{d}</span>
           ))}
         </div>
-        <div className="grid grid-cols-7 gap-1.5">
+        <div data-tour="calendar" className="grid grid-cols-7 gap-1.5">
           {Array.from({ length: lead }).map((_, i) => (
             <span key={`l${i}`} />
           ))}

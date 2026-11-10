@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, HandHeart, Home, MessageSquareText, Sparkles, Target, Trophy, UserRound, Waypoints, X } from "lucide-react";
+import { CalendarDays, CircleHelp, HandHeart, Home, MessageSquareText, Sparkles, Target, Trophy, UserRound, Waypoints, X } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { useEffect } from "react";
 
@@ -32,7 +32,7 @@ const destinations = [
 
 export function SideDrawer() {
   const t = useT();
-  const { drawerOpen, setDrawerOpen } = useUI();
+  const { drawerOpen, setDrawerOpen, startTutorial } = useUI();
   const { state } = useNowMode();
   const close = () => setDrawerOpen(false);
 
@@ -93,6 +93,22 @@ export function SideDrawer() {
           <nav className="flex-1 overflow-y-auto px-2 py-4" aria-label={t("nav.more")}>
             <p className="px-2 pb-2 text-[11px] font-bold uppercase tracking-wider text-dim">{t("drawer.section")}</p>
             <ul className="space-y-1">
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    close();
+                    startTutorial();
+                  }}
+                  className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+                >
+                  <CircleHelp className="size-[18px] shrink-0" strokeWidth={1.8} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold">{t("nav.tutorial")}</span>
+                    <span className="block truncate text-[11px] text-dim">{t("drawer.tutorialHint")}</span>
+                  </span>
+                </button>
+              </li>
               {destinations.map(({ to, label, hint, icon: Icon }) => (
                 <li key={to}>
                   <Link
