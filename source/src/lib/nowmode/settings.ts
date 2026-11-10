@@ -1,3 +1,4 @@
+import { toDateKey } from "./logic";
 import type { Nudges, Prefs } from "./types";
 
 export const DEFAULT_NUDGES: Nudges = { day: false, hour: true, ten: true, now: true };
@@ -30,6 +31,29 @@ export function reviewTimeBefore(quietStart: string, leadMin = 90): string {
   const mins = minutesOfDay(quietStart) ?? minutesOfDay(DEFAULT_QUIET_START) ?? 22 * 60;
   const next = (mins - leadMin + 24 * 60) % (24 * 60);
   return `${String(Math.floor(next / 60)).padStart(2, "0")}:${String(next % 60).padStart(2, "0")}`;
+}
+
+/**
+ * Whether the daily Board review is due in this 5-minute window.
+ * Quiet hours still record the key so it does not fire again later, but they do not notify.
+ */
+export function boardReviewFire(
+  now: Date,
+  prefs: Pick<Prefs, "boardReviewOn" | "quietHours" | "quietStart" | "quietEnd" | "boardReviewTime" | "boardReviewManual">,
+  fired: string[],
+): { key: string; record: boolean; notify: boolean } {
+  const time = effectiveBoardReviewTime(prefs);
+  const key = `board-review:${toDateKey(now)}:${time}`;
+  if (!prefs.boardReviewOn || fired.includes(key)) return { key, record: false, notify: false };
+  const [hour = 0, minute = 0] = time.split(":").map(Number);
+  const target = new Date(now);
+  target.setHours(hour, minute, 0, 0);
+  const diff = now.getTime() - target.getTime();
+  if (diff < 0 || diff >= 5 * 60_000) return { key, record: false, notify: false };
+  const quiet =
+    !!prefs.quietHours &&
+    isQuietAt(now, prefs.quietStart ?? DEFAULT_QUIET_START, prefs.quietEnd ?? DEFAULT_QUIET_END);
+  return { key, record: true, notify: !quiet };
 }
 
 /** Manual choice wins. Otherwise stay 90 minutes before the saved quiet-hours start. */

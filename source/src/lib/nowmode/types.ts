@@ -151,6 +151,8 @@ export interface FocusState {
   alarmedAt: number | null;
   /** True after the person types a session name. Otherwise the preset name is translated at display time. */
   nameEdited?: boolean;
+  /** This finished session already left one small win. A reload must not add another. */
+  credited?: boolean;
   /** When true, the countdown deadline is the linked event's end, not a free-floating preset. */
   linkedToBlock: boolean;
   /** Event end (epoch ms) whose Finish / Extend prompt is open. */

@@ -135,6 +135,78 @@ export function ruleFromDraft(draft: Omit<RecurrenceRule, "id" | "skips"> & { id
   };
 }
 
+/** Drop one occurrence and remember the date so a later horizon does not recreate it. A finished one stays. */
+export function skipOneOccurrence(
+  events: NowEvent[],
+  series: RecurrenceRule[],
+  id: string,
+  today: Date,
+): { events: NowEvent[]; series: RecurrenceRule[] } {
+  const event = events.find((item) => item.id === id);
+  if (!event?.seriesId || !event.occurrenceKey) return { events, series };
+  const nextSeries = series.map((rule) =>
+    rule.id === event.seriesId && !rule.skips.includes(event.occurrenceKey!)
+      ? { ...rule, skips: [...rule.skips, event.occurrenceKey!] }
+      : rule,
+  );
+  const kept = event.done ? events : events.filter((item) => item.id !== id);
+  return { series: nextSeries, events: materializeSeries(kept, nextSeries, today) };
+}
+
+/** Remove future untouched copies. Finished occurrences and earlier dates stay. */
+export function deleteSeriesKeepingHistory(
+  events: NowEvent[],
+  series: RecurrenceRule[],
+  id: string,
+  todayKey: string,
+): { events: NowEvent[]; series: RecurrenceRule[] } {
+  return {
+    series: series.filter((rule) => rule.id !== id),
+    events: events.filter((event) => event.seriesId !== id || event.done || event.date < todayKey),
+  };
+}
+
+/** This time becomes an exception. The series changes time and length for other unfinished future copies only. */
+export function editSeriesScope(
+  events: NowEvent[],
+  series: RecurrenceRule[],
+  id: string,
+  next: Pick<NowEvent, "date" | "time" | "duration" | "schedule">,
+  scope: "one" | "series",
+  today: Date,
+): { events: NowEvent[]; series: RecurrenceRule[] } {
+  const event = events.find((item) => item.id === id);
+  if (!event) return { events, series };
+  const useSeries = scope === "series" && !!event.seriesId;
+  let nextSeries = series;
+  let nextEvents = events.map((item) =>
+    item.id === id
+      ? {
+          ...item,
+          ...next,
+          exception: !useSeries && event.seriesId ? true : item.exception,
+          occurrenceKey: item.occurrenceKey,
+          seriesId: item.seriesId,
+        }
+      : item,
+  );
+  if (useSeries && event.seriesId) {
+    nextSeries = series.map((rule) =>
+      rule.id === event.seriesId ? { ...rule, time: next.time, duration: next.duration, schedule: next.schedule } : rule,
+    );
+    if (next.date !== event.date) {
+      nextEvents = nextEvents.map((item) =>
+        item.id === id
+          ? { ...item, ...next, exception: true, occurrenceKey: event.occurrenceKey ?? event.date, seriesId: event.seriesId }
+          : item,
+      );
+    }
+    const rule = nextSeries.find((item) => item.id === event.seriesId);
+    if (rule) nextEvents = applySeriesTiming(nextEvents, rule, dateKey(today));
+  }
+  return { series: nextSeries, events: materializeSeries(nextEvents, nextSeries, today) };
+}
+
 export function recurrenceReady(rule: Pick<RecurrenceRule, "freq" | "weekdays" | "monthDays" | "customBy">): boolean {
   if (rule.freq === "daily") return true;
   if (rule.freq === "weekly" || (rule.freq === "custom" && rule.customBy === "weekdays")) return rule.weekdays.length > 0;

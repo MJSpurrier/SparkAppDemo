@@ -348,7 +348,7 @@ function ReviewSheet({ onClose }: { onClose: () => void }) {
             className="mt-1 h-11 w-full rounded-xl border border-border2 bg-card px-3 text-sm"
           />
         </label>
-        <button type="button" className="text-xs font-semibold text-blue" onClick={() => setPrefs({ boardReviewManual: false, boardReviewTime: undefined })}>
+        <button type="button" className="text-left text-xs font-semibold leading-relaxed text-blue whitespace-normal" onClick={() => setPrefs({ boardReviewManual: false, boardReviewTime: undefined })}>
           {t("board.reviewDefault", { time: formatLocaleTime(effectiveBoardReviewTime({ quietStart: anchor }), locale) })}
         </button>
         <p className="text-[11px] leading-relaxed text-dim">{t("board.reviewLimit")}</p>
