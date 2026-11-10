@@ -22,6 +22,8 @@ interface UIState {
   stepsEventId: string | null;
   openSteps: (id: string) => void;
   closeSteps: () => void;
+  captureDraft: { text: string; cardId: string } | null;
+  openCardSchedule: (text: string, cardId: string) => void;
 }
 
 const UICtx = createContext<UIState | null>(null);
@@ -34,6 +36,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
   const [scheduleEventId, setScheduleEventId] = useState<string | null>(null);
   const [timerRequest, setTimerRequest] = useState<TimerRequest>(null);
   const [stepsEventId, setStepsEventId] = useState<string | null>(null);
+  const [captureDraft, setCaptureDraft] = useState<{ text: string; cardId: string } | null>(null);
 
   const value = useMemo<UIState>(
     () => ({
@@ -44,11 +47,22 @@ export function UIProvider({ children }: { children: ReactNode }) {
       sheetTab,
       setSheetTab,
       openSheet: (mode = "all", tab = "menu") => {
+        setCaptureDraft(null);
         setSheetMode(mode);
         setSheetTab(tab);
         setSheetOpen(true);
       },
-      closeSheet: () => setSheetOpen(false),
+      closeSheet: () => {
+        setCaptureDraft(null);
+        setSheetOpen(false);
+      },
+      captureDraft,
+      openCardSchedule: (text, cardId) => {
+        setCaptureDraft({ text, cardId });
+        setSheetMode("all");
+        setSheetTab("text");
+        setSheetOpen(true);
+      },
       scheduleEventId,
       openSchedule: (id: string) => setScheduleEventId(id),
       closeSchedule: () => setScheduleEventId(null),
@@ -59,7 +73,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
       openSteps: (id: string) => setStepsEventId(id),
       closeSteps: () => setStepsEventId(null),
     }),
-    [drawerOpen, sheetOpen, sheetMode, sheetTab, scheduleEventId, timerRequest, stepsEventId],
+    [drawerOpen, sheetOpen, sheetMode, sheetTab, scheduleEventId, timerRequest, stepsEventId, captureDraft],
   );
 
   return <UICtx.Provider value={value}>{children}</UICtx.Provider>;

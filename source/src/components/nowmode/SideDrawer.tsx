@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { CalendarDays, HandHeart, Home, MessageSquareText, Sparkles, Target, Trophy, UserRound, Waypoints, X } from "lucide-react";
+import { Avatar } from "./Avatar";
 import { useEffect } from "react";
 
 import { useT } from "@/lib/i18n/context";
 import type { MessageKey } from "@/lib/i18n/messages";
+import { greetingName } from "@/lib/nowmode/profile";
 import { useNowMode } from "@/lib/nowmode/store";
 import { toDateKey } from "@/lib/nowmode/logic";
 import { Logo } from "./Logo";
@@ -14,12 +16,12 @@ const rail = [
   { to: "/calendar", label: "nav.calendar", icon: CalendarDays },
   { to: "/board", label: "nav.board", icon: Waypoints },
   { to: "/focus", label: "nav.focus", icon: Target },
+  { to: "/wins", label: "nav.wins", icon: Trophy },
 ] as const;
 
-const shortcuts = [
-  { to: "/focus", label: "nav.focus", hint: "drawer.focusHint", icon: Target },
-  { to: "/wins", label: "nav.wins", hint: "drawer.winsHint", icon: Trophy },
-] as const;
+function greetingLine(prefs: Parameters<typeof greetingName>[0], fallback: string) {
+  return greetingName(prefs) || fallback;
+}
 
 const destinations = [
   { to: "/account", label: "nav.account", hint: "drawer.accountHint", icon: UserRound },
@@ -91,7 +93,7 @@ export function SideDrawer() {
           <nav className="flex-1 overflow-y-auto px-2 py-4" aria-label={t("nav.more")}>
             <p className="px-2 pb-2 text-[11px] font-bold uppercase tracking-wider text-dim">{t("drawer.section")}</p>
             <ul className="space-y-1">
-              {[...shortcuts, ...destinations].map(({ to, label, hint, icon: Icon }) => (
+              {destinations.map(({ to, label, hint, icon: Icon }) => (
                 <li key={to}>
                   <Link
                     to={to}
@@ -110,11 +112,9 @@ export function SideDrawer() {
           </nav>
 
           <div className="flex items-center gap-3 border-t border-border bg-background/60 px-4 py-3">
-            <div className="grid size-9 shrink-0 place-items-center rounded-full bg-card2 text-sm font-bold text-teal">
-              Y
-            </div>
+            <Avatar prefs={state.prefs} />
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{t("drawer.you")}</p>
+              <p className="truncate text-sm font-semibold">{greetingLine(state.prefs, t("drawer.you"))}</p>
               <p className="truncate text-[11px] text-green">● {t("drawer.winsToday", { n: winsToday })}</p>
             </div>
           </div>

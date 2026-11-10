@@ -1,4 +1,5 @@
 import { useT } from "@/lib/i18n/context";
+import type { ReactNode } from "react";
 import type { ScheduleType } from "@/lib/nowmode/types";
 import { cn } from "@/lib/utils";
 
@@ -21,17 +22,19 @@ export function ScheduleTypeField({
   value,
   onChange,
   name = "schedule-type",
+  extra,
 }: {
   value: ScheduleType;
   onChange: (value: ScheduleType) => void;
   name?: string;
+  extra?: ReactNode;
 }) {
   const t = useT();
   const helpId = `${name}-help`;
   return (
     <fieldset aria-describedby={helpId}>
       <legend className="text-xs font-semibold text-foreground">{t("kind.legend")}</legend>
-      <div className="mt-2 grid grid-cols-2 gap-2">
+      <div className={`mt-2 grid gap-2 ${extra ? "grid-cols-3" : "grid-cols-2"}`}>
         {(
           [
             ["flexible", "Flexible"],
@@ -59,6 +62,7 @@ export function ScheduleTypeField({
             </label>
           );
         })}
+        {extra}
       </div>
       <p id={helpId} className="mt-2 text-xs leading-relaxed text-muted-foreground">
         {t("kind.help")}

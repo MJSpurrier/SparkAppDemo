@@ -30,11 +30,15 @@ import {
   validateSlot,
   type SlotInput,
 } from "./schedule";
+import { creditFocusSession } from "./focus-credit";
+import { deleteSeriesKeepingHistory, editSeriesScope, materializeSeries, skipOneOccurrence } from "./recurrence";
 import { createSeed } from "./seed";
+import type { RecurrenceRule } from "./types";
 import {
   DEFAULT_NUDGES,
   DEFAULT_QUIET_END,
   DEFAULT_QUIET_START,
+  boardReviewFire,
   isQuietAt,
   normalizeLead,
   nudgeTierAllowed,
@@ -56,14 +60,16 @@ export type ExtendResult =
   | { ok: true }
   | { ok: false; message: string; reason?: "conflict"; minutes?: number };
 
-export type ScheduleInput = SlotInput & { schedule: ScheduleType };
+export type ScheduleInput = SlotInput & { schedule: ScheduleType; scope?: "one" | "series" };
 
 function load(): AppState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const migrated = migrateAppState(JSON.parse(raw));
-      if (migrated) return migrated;
+      if (migrated) {
+        return { ...migrated, events: materializeSeries(migrated.events, migrated.series ?? [], new Date()) };
+      }
     }
   } catch {
     /* fall through to seed */
@@ -142,6 +148,11 @@ interface Store {
   toggleNudge: (eventId: string, key: NudgeKey) => void;
   previewNudges: (eventId: string) => void;
   setPrefs: (p: Partial<Prefs>) => void;
+  setFocusLabel: (label: string) => void;
+  addSeries: (rule: RecurrenceRule) => void;
+  skipOccurrence: (id: string) => void;
+  deleteSeries: (id: string) => void;
+  cardAlreadyPlanned: (cardId: string) => boolean;
   addCard: (c: Omit<BoardCard, "id" | "x" | "y"> & Partial<Pick<BoardCard, "x" | "y">>) => void;
   moveCard: (id: string, x: number, y: number) => void;
   removeCard: (id: string) => void;
@@ -335,10 +346,11 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
     if (!ready) return;
     const check = () => {
       const s = stateRef.current;
-      if (!s.prefs.layeredNudges) return;
       const now = new Date();
       const fired: string[] = [];
-      for (const ev of s.events) {
+      if (!s.prefs.layeredNudges) {
+        /* Board review is its own switch and still runs below. */
+      } else for (const ev of s.events) {
         if (ev.done) continue;
         const at = eventDate(ev).getTime();
         for (const tier of NUDGE_TIERS) {
@@ -355,6 +367,11 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
             }
           }
         }
+      }
+      const review = boardReviewFire(now, s.prefs, [...s.firedNudges, ...fired]);
+      if (review.record) {
+        fired.push(review.key);
+        if (review.notify) notify(translate(localeOf(s.prefs), "board.reviewNow"));
       }
       if (fired.length) {
         setState((p) => ({ ...p, firedNudges: [...p.firedNudges, ...fired].slice(-300) }));
@@ -451,6 +468,27 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
         );
       },
       setPrefs: (p) => update((s) => ({ ...s, prefs: { ...s.prefs, ...p } })),
+      setFocusLabel: (label) => updateFocus((f) => ({ ...f, label, nameEdited: true })),
+      addSeries: (rule) =>
+        update((s) => {
+          const series = [...(s.series ?? []), rule];
+          return { ...s, series, events: materializeSeries(s.events, series, new Date()) };
+        }),
+      skipOccurrence: (id) =>
+        update((s) => {
+          const next = skipOneOccurrence(s.events, s.series ?? [], id, new Date());
+          return { ...s, ...next };
+        }),
+      deleteSeries: (id) =>
+        update((s) => {
+          const next = deleteSeriesKeepingHistory(s.events, s.series ?? [], id, toDateKey(new Date()));
+          return { ...s, ...next };
+        }),
+      cardAlreadyPlanned: (cardId) => {
+        const s = stateRef.current;
+        if (s.events.some((event) => event.sourceCardId === cardId && !event.done)) return true;
+        return (s.series ?? []).some((rule) => rule.sourceCardId === cardId);
+      },
       addCard: (c) =>
         update((s) => {
           const n = s.cards.length;
@@ -489,6 +527,8 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
             ...f,
             presetId: id,
             label: p?.label ?? f.label,
+            nameEdited: false,
+            credited: false,
             eventId: null,
             linkedToBlock: false,
             endPromptFor: null,
@@ -559,6 +599,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
               running: true,
               endsAt: Date.now() + remaining * 1000,
               finished: false,
+              credited: false,
               endPromptFor: null,
               twoMinNotified: minutes ? false : f.twoMinNotified,
               alarmedAt: minutes ? null : f.alarmedAt,
@@ -792,6 +833,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
         if (!ev) return { ok: false, message: translate(localeOf(stateRef.current.prefs), "timer.missing") };
         const next = applyReschedule(ev, input);
         const moved = slotChanged(ev, input);
+        const scope = raw.scope === "series" && ev.seriesId ? "series" : "one";
         setState((prev) => {
           let focus = prev.focus;
           if (focus.eventId === id && focus.linkedToBlock) {
@@ -812,9 +854,11 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
               };
             }
           }
+          const edited = editSeriesScope(prev.events, prev.series ?? [], id, next, scope, new Date());
           return {
             ...prev,
-            events: prev.events.map((e) => (e.id === id ? next : e)),
+            series: edited.series,
+            events: edited.events,
             firedNudges: moved ? clearFiredFor(prev.firedNudges, id) : prev.firedNudges,
             focus,
           };
@@ -823,27 +867,11 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
       },
       setBodyDouble: (on) => updateFocus((f) => ({ ...f, bodyDouble: on })),
       checkIn: (choice) => {
-        const f = stateRef.current.focus;
-        if (f.linkedToBlock) return;
-        if (choice === "more") {
-          updateFocus((x) => extendFocusState(x, 5));
-          return;
-        }
-        addWin(
-          f.label ||
-            translate(
-              resolvedLocale(
-                stateRef.current.prefs.locale,
-                typeof navigator === "undefined" ? undefined : navigator.language,
-              ),
-              "focus.session",
-            ),
-          f.eventId ?? undefined,
-        );
-        if (f.eventId) {
-          updateEvent(f.eventId, (e) => ({ ...e, done: true }));
-        }
-        updateFocus((x) => ({ ...x, finished: false, remainingSec: x.totalSec, twoMinNotified: false, running: false }));
+        setState((s) => {
+          if (s.focus.linkedToBlock || !s.focus.finished) return s;
+          if (choice === "more") return { ...s, focus: extendFocusState(s.focus, 5) };
+          return creditFocusSession(s);
+        });
       },
       resetAll: () => {
         setState(createSeed());

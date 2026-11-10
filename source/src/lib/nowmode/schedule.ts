@@ -1,5 +1,5 @@
 import { eventDate, formatTime, toDateKey } from "./logic";
-import type { AppState, FocusState, NowEvent, ScheduleType, Win } from "./types";
+import type { AppState, FocusState, NowEvent, RecurrenceRule, ScheduleType, Win } from "./types";
 
 export const MAX_BLOCK_MINUTES = 12 * 60;
 
@@ -213,6 +213,7 @@ export function defaultFocus(partial: Partial<FocusState> = {}): FocusState {
     alarmedAt: null,
     linkedToBlock: false,
     endPromptFor: null,
+    nameEdited: false,
     ...partial,
   };
 }
@@ -255,7 +256,39 @@ export function migrateEvent(raw: Partial<NowEvent>): NowEvent {
       now: nudges.now !== false,
     },
     schedule: raw.schedule === "flexible" ? "flexible" : "fixed",
+    seriesId: typeof raw.seriesId === "string" ? raw.seriesId : undefined,
+    occurrenceKey: typeof raw.occurrenceKey === "string" ? raw.occurrenceKey : undefined,
+    exception: raw.exception === true ? true : undefined,
+    sourceCardId: typeof raw.sourceCardId === "string" ? raw.sourceCardId : undefined,
   };
+}
+
+function migrateSeries(raw: unknown): RecurrenceRule[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const rule = item as Partial<RecurrenceRule>;
+    if (typeof rule.id !== "string" || typeof rule.title !== "string" || typeof rule.start !== "string") return [];
+    const freq = rule.freq === "daily" || rule.freq === "weekly" || rule.freq === "monthly" || rule.freq === "custom" ? rule.freq : "weekly";
+    return [{
+      id: rule.id,
+      freq,
+      weekdays: Array.isArray(rule.weekdays) ? rule.weekdays.filter((day) => day >= 0 && day <= 6) : [],
+      monthDays: Array.isArray(rule.monthDays) ? rule.monthDays.filter((day) => day >= 1 && day <= 31) : [],
+      customBy: rule.customBy === "monthDays" ? "monthDays" : "weekdays",
+      start: rule.start,
+      end: typeof rule.end === "string" ? rule.end : undefined,
+      time: typeof rule.time === "string" ? rule.time : "09:00",
+      duration: typeof rule.duration === "number" && rule.duration > 0 ? rule.duration : 25,
+      schedule: rule.schedule === "fixed" ? "fixed" : "flexible",
+      title: rule.title,
+      tag: typeof rule.tag === "string" ? rule.tag : "Capture",
+      color: rule.color ?? "blue",
+      nudges: rule.nudges ?? { day: false, hour: true, ten: true, now: true },
+      skips: Array.isArray(rule.skips) ? rule.skips.filter((day) => typeof day === "string") : [],
+      sourceCardId: typeof rule.sourceCardId === "string" ? rule.sourceCardId : undefined,
+    } satisfies RecurrenceRule];
+  });
 }
 
 /** Recompute a running countdown from its wall-clock deadline after reload or a background tab. */
@@ -324,5 +357,6 @@ export function migrateAppState(raw: unknown, now = Date.now()): AppState | null
     wins: Array.isArray(parsed.wins) ? parsed.wins.filter(isWinLike).map(migrateWin) : [],
     focus,
     firedNudges: Array.isArray(parsed.firedNudges) ? parsed.firedNudges : [],
+    series: migrateSeries(parsed.series),
   };
 }

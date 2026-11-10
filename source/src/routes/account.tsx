@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { BellRing, Moon, LogOut, Palette, Timer } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import { Avatar } from "@/components/nowmode/Avatar";
+import { greetingName } from "@/lib/nowmode/profile";
 import { toast } from "sonner";
 
 import { Loading } from "@/components/nowmode/Loading";
@@ -31,6 +33,109 @@ export const Route = createFileRoute("/account")({
   component: Account,
 });
 
+async function compressImage(file: File): Promise<string | null> {
+  try {
+    const raw = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("image"));
+      image.src = raw;
+    });
+    const scale = Math.min(1, 320 / Math.max(img.width, img.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const small = canvas.toDataURL("image/jpeg", 0.7);
+    return small.length > 350_000 ? canvas.toDataURL("image/jpeg", 0.45) : small;
+  } catch {
+    return null;
+  }
+}
+
+function ProfileCard() {
+  const t = useT();
+  const { state, setPrefs } = useNowMode();
+  const prefs = state.prefs;
+  const name = greetingName(prefs);
+  return (
+    <section className="space-y-3 rounded-[20px] border border-border2 bg-hero p-5">
+      <div className="flex items-center gap-4">
+        <Avatar prefs={prefs} size="size-14 text-xl" />
+        <div className="min-w-0">
+          <p className="truncate text-lg font-bold">{name || t("account.name")}</p>
+          {!name && <p className="text-xs text-dim">{t("profile.missing")}</p>}
+          <span className="mt-2 inline-block rounded-full border border-blue/40 bg-blue/10 px-2.5 py-0.5 text-[11px] font-semibold text-blue">{t("account.plan")}</span>
+        </div>
+      </div>
+      <label className="block text-xs font-semibold">
+        {t("profile.username")}
+        <input
+          value={prefs.username ?? ""}
+          onChange={(e) => setPrefs({ username: e.target.value })}
+          className="mt-1 h-11 w-full rounded-xl border border-border2 bg-card px-3 text-sm font-medium focus:border-blue focus:outline-none"
+        />
+      </label>
+      <label className="block text-xs font-semibold">
+        {t("profile.realName")}
+        <input
+          value={prefs.realName ?? ""}
+          onChange={(e) => setPrefs({ realName: e.target.value })}
+          className="mt-1 h-11 w-full rounded-xl border border-border2 bg-card px-3 text-sm font-medium focus:border-blue focus:outline-none"
+        />
+      </label>
+      <fieldset>
+        <legend className="text-xs font-semibold">{t("profile.greet")}</legend>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {(["realName", "username"] as const).map((choice) => (
+            <button
+              key={choice}
+              type="button"
+              aria-pressed={(prefs.greetAs ?? "realName") === choice}
+              onClick={() => setPrefs({ greetAs: choice })}
+              className={`rounded-xl border px-2 py-2 text-xs font-semibold ${(prefs.greetAs ?? "realName") === choice ? "border-blue/60 bg-blue/15 text-blue" : "border-border2 text-muted-foreground"}`}
+            >
+              {t(choice === "realName" ? "profile.greetReal" : "profile.greetUser")}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      <div className="flex flex-wrap gap-2">
+        <label className="inline-flex h-10 cursor-pointer items-center rounded-xl border border-border2 bg-card px-3 text-xs font-semibold">
+          {t("profile.photoBtn")}
+          <input
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              const url = await compressImage(file);
+              if (!url || url.length > 350_000) {
+                toast(t("storage.full"), { description: t("profile.photoBig") });
+                return;
+              }
+              setPrefs({ avatar: url });
+            }}
+          />
+        </label>
+        {prefs.avatar && (
+          <Button type="button" variant="secondary" className="h-10 rounded-xl" onClick={() => setPrefs({ avatar: undefined })}>
+            {t("profile.photoRemove")}
+          </Button>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function Account() {
   const t = useT();
   const locale = useLocale();
@@ -45,14 +150,7 @@ function Account() {
     <div className="pb-8">
       <ScreenHeader back title={t("account.title")} />
       <div className="space-y-5 px-5">
-        <section className="flex items-center gap-4 rounded-[20px] border border-border2 bg-hero p-5">
-          <div className="grid size-14 shrink-0 place-items-center rounded-full bg-card2 text-xl font-bold text-teal ring-1 ring-border2">Y</div>
-          <div className="min-w-0">
-            <p className="truncate text-lg font-bold">{t("account.name")}</p>
-            <p className="truncate text-sm text-muted-foreground">you@example.com</p>
-            <span className="mt-2 inline-block rounded-full border border-blue/40 bg-blue/10 px-2.5 py-0.5 text-[11px] font-semibold text-blue">{t("account.plan")}</span>
-          </div>
-        </section>
+        <ProfileCard />
 
         <section>
           <h2 className="px-1 pb-2 text-[11px] font-bold uppercase tracking-wider text-dim">{t("account.language")}</h2>
