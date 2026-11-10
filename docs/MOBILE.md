@@ -160,6 +160,23 @@ App Store Connect:
 - Screenshots. Current App Store Connect asks for the 6.9-inch iPhone set (1320×2868) if the app runs on those phones. Also provide the 6.5-inch set (1284×2778 or 1242×2688) if the form still lists it. If the target stays universal, the 13-inch iPad set (2064×2752) is required too. You can set the target to iPhone only in Xcode to drop the iPad set.
 - Add yourself as an internal TestFlight tester. External testers need a short Beta App Review. Production review is a separate submission.
 
+## Tester APK
+
+Testers install a signed APK, not a Play listing. The short guide is `docs/TESTER.md` (English and Spanish).
+
+The tester key is separate from a future Play upload key. It lives only on the machine that created it, at `~/.nowmode/nowmode-tester.jks`, alias `nowmode-tester`. The passwords are in `~/.nowmode/keystore.env` on that same machine. Neither file is in git. Future tester APKs must be signed with this same keystore and alias, or Android will refuse to install the update over the old app. If the machine is discarded before those files are copied into GitHub secrets, the key is gone and every tester must uninstall, which deletes the plans on the phone.
+
+`source/android/version.properties` holds `VERSION_CODE` and `VERSION_NAME`. The first tester build is `1.0.0` (versionCode 1).
+
+GitHub Actions workflow `.github/workflows/android-tester.yml` runs when someone starts it by hand. It raises versionCode by 1 and the patch number of versionName, commits that bump, builds a signed release APK, and attaches it to a prerelease. It does nothing until these repository secrets exist (Settings → Secrets and variables → Actions):
+
+- `ANDROID_KEYSTORE_BASE64`: the keystore file encoded with `base64 -w 0 nowmode-tester.jks`
+- `ANDROID_KEYSTORE_PASSWORD`: the store password
+- `ANDROID_KEY_ALIAS`: `nowmode-tester`
+- `ANDROID_KEY_PASSWORD`: the key password
+
+The workflow also needs permission to push the version bump and to create releases. Do not paste the passwords into the repo, the pull request, or a chat log.
+
 ## What you still have to do yourself
 
 - A Google Play Console account, the 12-tester / 14-day closed test if the account is a new personal one, and the upload.
