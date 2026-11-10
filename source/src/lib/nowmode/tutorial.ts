@@ -33,9 +33,16 @@ export function isLastStep(index: number): boolean {
   return index >= TUTORIAL_STEPS.length - 1;
 }
 
-/** First visit only. Anyone who already has saved data is left alone until they tap Tutorial. */
-export function shouldAutoStart(hadSavedData: boolean, tutorialDone: boolean | undefined): boolean {
-  return !hadSavedData && tutorialDone !== true;
+/**
+ * First visit, and only after the account screen.
+ * Anyone who already has saved data is left alone until they tap Tutorial.
+ */
+export function shouldAutoStart(
+  hadSavedData: boolean,
+  tutorialDone: boolean | undefined,
+  accountReady: boolean,
+): boolean {
+  return accountReady && !hadSavedData && tutorialDone !== true;
 }
 
 /** Keep the card inside the phone frame, preferring the room under the highlight. */

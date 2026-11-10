@@ -501,6 +501,19 @@ export const en = {
   "alarm.done": "Time's up",
   "alarm.doneBody": "{title} is finished. One thing at a time.",
   "sound.limitNative": "On the installed app, these reminders can sound even when Now Mode is closed. An imported sound uses the phone's default tone. The five built-in sounds play when the phone allows them.",
+  "onboard.title": "Create your account",
+  "onboard.lead": "This stays on this device. Today will greet you by this name.",
+  "onboard.email": "Email",
+  "onboard.name": "Name",
+  "onboard.username": "Username",
+  "onboard.submit": "Continue",
+  "onboard.emailRequired": "Add an email.",
+  "onboard.emailInvalid": "That email does not look right.",
+  "onboard.nameRequired": "Add your name.",
+  "onboard.usernameRequired": "Add a username.",
+  "onboard.usernameInvalid": "Use 2–24 letters or numbers, then dots, underscores, or hyphens. Start with a letter or number.",
+  "onboard.note": "A server account can be added later. Nothing here is uploaded.",
+  "onboard.failed": "That account could not be created.",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -1008,6 +1021,19 @@ const es419: Record<MessageKey, string> = {
   "alarm.done": "Se acabó el tiempo",
   "alarm.doneBody": "{title} terminó. Una cosa a la vez.",
   "sound.limitNative": "En la app instalada, estos avisos pueden sonar aunque cierres Now Mode. Un sonido importado usa el tono del teléfono. Los cinco sonidos incluidos suenan cuando el teléfono lo permite.",
+  "onboard.title": "Crea tu cuenta",
+  "onboard.lead": "Esto se queda en este dispositivo. Hoy te saluda con este nombre.",
+  "onboard.email": "Correo",
+  "onboard.name": "Nombre",
+  "onboard.username": "Usuario",
+  "onboard.submit": "Continuar",
+  "onboard.emailRequired": "Agrega un correo.",
+  "onboard.emailInvalid": "Ese correo no se ve bien.",
+  "onboard.nameRequired": "Agrega tu nombre.",
+  "onboard.usernameRequired": "Agrega un usuario.",
+  "onboard.usernameInvalid": "Usa de 2 a 24 letras o números, y luego puntos, guiones bajos o guiones. Empieza con una letra o un número.",
+  "onboard.note": "Una cuenta en un servidor puede llegar después. Nada de esto se sube.",
+  "onboard.failed": "No se pudo crear esa cuenta.",
 };
 
 const esES: Record<MessageKey, string> = {
@@ -1317,6 +1343,15 @@ const esES: Record<MessageKey, string> = {
   "privacy.p3": "Los avisos se programan en el dispositivo. Si más adelante hay avisos de novedades, solo traen noticias de Now Mode. Puedes borrar todo limpiando los datos de esta aplicación.",
   "update.body": "Hay una versión más nueva de Now Mode. Tus notas se quedan en este dispositivo.",
   "sound.limitNative": "En la aplicación instalada, estos avisos pueden sonar aunque cierres Now Mode. Un sonido importado usa el tono del teléfono. Los cinco sonidos incluidos suenan cuando el teléfono lo permite.",
+  "onboard.lead": "Esto se queda en el dispositivo. Hoy te saluda con este nombre.",
+  "onboard.username": "Nombre de usuario",
+  "onboard.emailRequired": "Añade un correo.",
+  "onboard.emailInvalid": "Ese correo no es válido.",
+  "onboard.nameRequired": "Añade tu nombre.",
+  "onboard.usernameRequired": "Añade un nombre de usuario.",
+  "onboard.usernameInvalid": "Usa de 2 a 24 letras o números, y luego puntos, guiones bajos o guiones. Empieza por una letra o un número.",
+  "onboard.note": "Una cuenta de servidor puede añadirse más adelante. Nada de esto se envía.",
+  "onboard.failed": "No se ha podido crear esa cuenta.",
 };
 
 export const messages = { en, "es-419": es419, "es-ES": esES } as const;

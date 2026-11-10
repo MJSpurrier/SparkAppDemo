@@ -1,4 +1,5 @@
 import { addDays, toDateKey, uid } from "./logic";
+import { defaultFocus } from "./schedule";
 import type { AppState, EventColor, NowEvent, ScheduleType } from "./types";
 
 const nudgesOn = { day: false, hour: true, ten: true, now: true };
@@ -26,6 +27,32 @@ function ev(
     schedule,
     ...extra,
   };
+}
+
+/** A brand-new native install. No sample tasks, notes, wins, or history. */
+export function createEmpty(now = new Date()): AppState {
+  void now;
+  return {
+    version: 1,
+    events: [],
+    cards: [],
+    links: [],
+    prefs: { layeredNudges: true, focusReminders: true, quietHours: false },
+    energy: null,
+    wins: [],
+    focus: defaultFocus(),
+    firedNudges: [],
+    series: [],
+  };
+}
+
+/**
+ * A saved blob always wins, on the phone and on the website.
+ * Only a visit with nothing stored yet gets a fresh state: empty on native, demo on the Pages tester.
+ */
+export function stateForVisit(saved: AppState | null, native: boolean, now = new Date()): AppState {
+  if (saved) return saved;
+  return native ? createEmpty(now) : createSeed(now);
 }
 
 export function createSeed(now = new Date()): AppState {

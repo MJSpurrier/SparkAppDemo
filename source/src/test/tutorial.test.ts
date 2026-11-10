@@ -22,10 +22,11 @@ describe("tutorial steps", () => {
   });
 
   it("offers the tour only on a first visit", () => {
-    expect(shouldAutoStart(false, undefined)).toBe(true);
-    expect(shouldAutoStart(false, false)).toBe(true);
-    expect(shouldAutoStart(true, undefined)).toBe(false);
-    expect(shouldAutoStart(false, true)).toBe(false);
+    expect(shouldAutoStart(false, undefined, true)).toBe(true);
+    expect(shouldAutoStart(false, false, true)).toBe(true);
+    expect(shouldAutoStart(true, undefined, true)).toBe(false);
+    expect(shouldAutoStart(false, true, true)).toBe(false);
+    expect(shouldAutoStart(false, undefined, false)).toBe(false);
   });
 
   it("keeps the card inside the frame", () => {

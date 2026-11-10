@@ -4,6 +4,14 @@ The website at `https://mjspurrier.github.io/SparkAppDemo/` stays a hash-routed 
 
 Plans stay in `localStorage` under `nowmode-v1`. Installing the native app does not read the browser's storage, and opening the website does not wipe the app. Nothing in this setup resets that key.
 
+A brand-new phone install starts empty: no sample tasks, board notes, wins, reminders, or history. The GitHub Pages build still includes the demo day so a tester can look around. If `nowmode-v1` is already on the device, it is migrated and left in place.
+
+## Account screen
+
+The first launch, before the tutorial, asks for an email, a name, and a username. The name and username are saved in the existing profile, and Today greets with the name. The email stays in that same on-device profile. There is no server call.
+
+The form talks to an `AuthProvider` in `source/src/lib/nowmode/auth.ts`. The current provider, `createDeviceAuth`, only stores the account on the device. A real account needs a backend plugged into that same interface: Supabase email auth (magic link or password) and, after that, cloud sync. Until that provider exists, closing the app does not create a login anywhere else, and a new phone does not see the old one. Do not tell store reviewers that people can sign in across devices yet.
+
 App id: `com.nowmode.planner`. App name: Now Mode. Version: `1.0.0` in `source/package.json`, `source/src/lib/nowmode/version.ts`, `source/public/version.json`, the Android `versionName`, and the iOS marketing version. Bump them together.
 
 ## Scripts

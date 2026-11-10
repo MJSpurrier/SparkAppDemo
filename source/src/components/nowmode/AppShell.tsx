@@ -6,6 +6,7 @@ import { StepEditor } from "./StepEditor";
 import { SideDrawer } from "./SideDrawer";
 import { TabBar } from "./TabBar";
 import { TimerSwitchDialog } from "./TimerSwitchDialog";
+import { Onboarding } from "./Onboarding";
 import { TutorialTour } from "./TutorialTour";
 import { UpdateBanner } from "./UpdateBanner";
 
@@ -24,6 +25,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <TabBar />
         <SideDrawer />
+        <Onboarding />
         <TutorialTour />
       </div>
     </div>
