@@ -5,6 +5,7 @@ import { explainScheduleError, translate } from "@/lib/i18n/context";
 import { formatLocaleTime } from "@/lib/i18n/format";
 import { resolvedLocale } from "@/lib/i18n/context";
 import { configureAlarm, loadCustomSound, playBlockChime } from "./alarm";
+import { syncNativeReminders } from "./native-sync";
 import {
   NUDGE_TIERS,
   eventDate,
@@ -33,7 +34,7 @@ import {
 } from "./schedule";
 import { creditFocusSession } from "./focus-credit";
 import { deleteSeriesKeepingHistory, editSeriesScope, materializeSeries, removeOccurrence, skipOneOccurrence } from "./recurrence";
-import { createSeed } from "./seed";
+import { stateForVisit } from "./seed";
 import type { RecurrenceRule } from "./types";
 import {
   DEFAULT_NUDGES,
@@ -71,19 +72,23 @@ export function hadSavedNowMode(): boolean {
 }
 
 function load(): AppState {
+  const native = import.meta.env.VITE_NATIVE === "1";
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       savedOnLoad = true;
       const migrated = migrateAppState(JSON.parse(raw));
       if (migrated) {
-        return { ...migrated, events: materializeSeries(migrated.events, migrated.series ?? [], new Date()) };
+        return stateForVisit(
+          { ...migrated, events: materializeSeries(migrated.events, migrated.series ?? [], new Date()) },
+          native,
+        );
       }
     }
   } catch {
-    /* fall through to seed */
+    /* fall through to a fresh state */
   }
-  return createSeed();
+  return stateForVisit(null, native);
 }
 
 export function notify(message: string, opts?: { title?: string }) {
@@ -195,7 +200,9 @@ const Ctx = createContext<Store | null>(null);
 
 export function NowModeProvider({ children }: { children: ReactNode }) {
   // Seed is replaced from localStorage after mount, so SSR and first client render match.
-  const [state, setState] = useState<AppState>(() => createSeed(new Date(2026, 0, 1)));
+  const [state, setState] = useState<AppState>(() =>
+    stateForVisit(null, import.meta.env.VITE_NATIVE === "1", new Date(2026, 0, 1)),
+  );
   const [ready, setReady] = useState(false);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -216,6 +223,11 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
     });
     if (state.prefs.alarmSound === "custom") void loadCustomSound();
   }, [ready, state.prefs.alarmSound, state.prefs.alarmVolume]);
+
+  useEffect(() => {
+    if (!ready || import.meta.env.VITE_NATIVE !== "1") return;
+    void syncNativeReminders(stateRef.current).catch(() => {});
+  }, [ready, state.events, state.prefs, state.focus.endsAt, state.focus.running, state.focus.label]);
 
   useEffect(() => {
     if (!ready) return;
@@ -369,6 +381,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
     if (!ready) return;
     const check = () => {
       const s = stateRef.current;
+      if (!hadSavedNowMode() && !s.prefs.accountReady) return;
       const now = new Date();
       const fired: string[] = [];
       if (!s.prefs.layeredNudges) {
@@ -906,7 +919,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
         });
       },
       resetAll: () => {
-        setState(createSeed());
+        setState(stateForVisit(null, import.meta.env.VITE_NATIVE === "1"));
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps

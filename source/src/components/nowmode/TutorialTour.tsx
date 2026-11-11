@@ -38,13 +38,15 @@ export function TutorialTour() {
 
   useEffect(() => {
     if (!ready || offered.current) return;
+    const saved = hadSavedNowMode();
+    if (!saved && !state.prefs.accountReady) return;
     offered.current = true;
-    if (shouldAutoStart(hadSavedNowMode(), state.prefs.tutorialDone)) {
+    if (shouldAutoStart(saved, state.prefs.tutorialDone, !!state.prefs.accountReady)) {
       setReturnTo(path);
       setIndex(0);
       setSession(1);
     }
-  }, [ready, state.prefs.tutorialDone, path]);
+  }, [ready, state.prefs.accountReady, state.prefs.tutorialDone, path]);
 
   useEffect(() => {
     if (!tutorialNonce) return;

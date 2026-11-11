@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, CircleHelp, HandHeart, Home, MessageSquareText, Sparkles, Target, Trophy, UserRound, Waypoints, X } from "lucide-react";
+import { CalendarDays, CircleHelp, HandHeart, Home, MessageSquareText, Shield, Smartphone, Sparkles, Target, Trophy, UserRound, Waypoints, X } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { useEffect } from "react";
 
@@ -28,6 +28,7 @@ const destinations = [
   { to: "/mission", label: "nav.mission", hint: "drawer.missionHint", icon: Sparkles },
   { to: "/support", label: "nav.support", hint: "drawer.supportHint", icon: HandHeart },
   { to: "/feedback", label: "nav.feedback", hint: "drawer.feedbackHint", icon: MessageSquareText },
+  { to: "/privacy", label: "nav.privacy", hint: "drawer.privacyHint", icon: Shield },
 ] as const;
 
 export function SideDrawer() {
@@ -109,6 +110,21 @@ export function SideDrawer() {
                   </span>
                 </button>
               </li>
+              {import.meta.env.VITE_NATIVE !== "1" && (
+                <li>
+                  <Link
+                    to="/install"
+                    onClick={close}
+                    className="flex items-center gap-3 rounded-xl px-2 py-2.5 text-muted-foreground transition-colors hover:bg-card hover:text-foreground data-[status=active]:bg-card2 data-[status=active]:text-foreground"
+                  >
+                    <Smartphone className="size-[18px] shrink-0" strokeWidth={1.8} />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold">{t("install.title")}</span>
+                      <span className="block truncate text-[11px] text-dim">{t("drawer.installHint")}</span>
+                    </span>
+                  </Link>
+                </li>
+              )}
               {destinations.map(({ to, label, hint, icon: Icon }) => (
                 <li key={to}>
                   <Link

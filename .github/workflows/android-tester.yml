@@ -1,0 +1,98 @@
+name: Android tester APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: source/package-lock.json
+
+      - name: Bump versionCode and versionName
+        working-directory: source/android
+        run: |
+          set -euo pipefail
+          code=$(grep '^VERSION_CODE=' version.properties | cut -d= -f2)
+          name=$(grep '^VERSION_NAME=' version.properties | cut -d= -f2)
+          code=$((code + 1))
+          major=${name%%.*}
+          rest=${name#*.}
+          minor=${rest%%.*}
+          patch=${rest#*.}
+          patch=$((patch + 1))
+          printf 'VERSION_CODE=%s\nVERSION_NAME=%s.%s.%s\n' "$code" "$major" "$minor" "$patch" > version.properties
+          echo "VERSION_CODE=$code" >> "$GITHUB_ENV"
+          echo "VERSION_NAME=$major.$minor.$patch" >> "$GITHUB_ENV"
+
+      - name: Commit the version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add source/android/version.properties
+          git commit -m "Bump Android tester to ${VERSION_NAME} (${VERSION_CODE})."
+          git push
+
+      - name: Build the native web bundle
+        working-directory: source
+        run: |
+          npm ci
+          npm run build:native
+          npx cap sync android
+
+      - name: Decode the tester keystore
+        working-directory: source/android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/nowmode-tester.jks"
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$RUNNER_TEMP/nowmode-tester.jks" \
+            "$ANDROID_KEYSTORE_PASSWORD" \
+            "$ANDROID_KEY_ALIAS" \
+            "$ANDROID_KEY_PASSWORD" > keystore.properties
+
+      - name: Assemble the signed release APK
+        working-directory: source/android
+        run: chmod +x ./gradlew && ./gradlew assembleRelease --no-daemon
+
+      - name: Rename the APK
+        run: |
+          cp source/android/app/build/outputs/apk/release/app-release.apk \
+            "nowmode-tester-${VERSION_NAME}.apk"
+
+      - name: Attach it to a prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: tester-v${{ env.VERSION_NAME }}
+          name: Now Mode tester v${{ env.VERSION_NAME }}
+          prerelease: true
+          generate_release_notes: false
+          body: |
+            Signed tester build ${{ env.VERSION_NAME }} (versionCode ${{ env.VERSION_CODE }}).
+            Install over the previous tester APK. Do not uninstall first if you want to keep plans on the phone.
+            See docs/TESTER.md.
+          files: nowmode-tester-${{ env.VERSION_NAME }}.apk
+          fail_on_unmatched_files: true

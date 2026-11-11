@@ -97,6 +97,10 @@ export interface Prefs {
   alarmVolume?: number;
   /** Set when the person finishes or skips the tour. Missing does not mean they should see it. */
   tutorialDone?: boolean;
+  /** Email from the on-device account screen. Not uploaded. */
+  email?: string;
+  /** Set after the first-run account screen. Missing on older saves, which must not be asked again. */
+  accountReady?: boolean;
 }
 
 export type RecurrenceFreq = "daily" | "weekly" | "monthly" | "custom";

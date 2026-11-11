@@ -5,6 +5,9 @@ import { toast } from "sonner";
 import { useT } from "@/lib/i18n/context";
 import { formatLocaleTime } from "@/lib/i18n/format";
 import { useLocale } from "@/lib/i18n/context";
+import { speechEngine, speechLanguage } from "@/lib/nowmode/device-access";
+import { PhotoDenied, openAppSettings, photoAccess, takeOrChoosePhoto } from "@/lib/nowmode/native-device";
+import { PermitCard } from "./PermitCard";
 import { explainScheduleError } from "@/lib/i18n/context";
 import { Button } from "@/components/ui/button";
 import { addDays, nextHalfHour, parseCapture, toDateKey } from "@/lib/nowmode/logic";
@@ -383,19 +386,72 @@ function TextCapture() {
 
 function VoiceCapture() {
   const t = useT();
+  const locale = useLocale();
+  const native = import.meta.env.VITE_NATIVE === "1";
   const { addCard } = useNowMode();
   const { closeSheet } = useUI();
   const recRef = useRef<any>(null);
   const [supported, setSupported] = useState<boolean | null>(null);
   const [listening, setListening] = useState(false);
   const [transcript, setTranscript] = useState("");
+  const [gate, setGate] = useState<null | "explain" | "denied">(null);
 
   useEffect(() => {
-    setSupported(!!getRecognition());
-    return () => recRef.current?.stop?.();
-  }, []);
+    const engine = speechEngine(native, !!getRecognition());
+    if (engine === "web") {
+      setSupported(true);
+      return () => recRef.current?.stop?.();
+    }
+    if (engine === "none") {
+      setSupported(false);
+      return;
+    }
+    let live = true;
+    void import("@capacitor-community/speech-recognition").then(async ({ SpeechRecognition }) => {
+      const avail = await SpeechRecognition.available();
+      if (live) setSupported(avail.available);
+    }).catch(() => {
+      if (live) setSupported(false);
+    });
+    return () => {
+      live = false;
+      void import("@capacitor-community/speech-recognition").then(({ SpeechRecognition }) => SpeechRecognition.stop()).catch(() => {});
+    };
+  }, [native]);
 
-  const start = () => {
+  const listenNative = async () => {
+    const { SpeechRecognition } = await import("@capacitor-community/speech-recognition");
+    await SpeechRecognition.removeAllListeners();
+    await SpeechRecognition.addListener("partialResults", (data) => {
+      const text = data.matches?.[0] ?? "";
+      if (text) setTranscript(text);
+    });
+    await SpeechRecognition.start({
+      language: speechLanguage(locale),
+      maxResults: 1,
+      partialResults: true,
+      popup: false,
+    });
+    setListening(true);
+  };
+
+  const start = async () => {
+    if (native) {
+      try {
+        const { SpeechRecognition } = await import("@capacitor-community/speech-recognition");
+        const perm = await SpeechRecognition.checkPermissions();
+        if (perm.speechRecognition === "granted") {
+          setGate(null);
+          await listenNative();
+          return;
+        }
+        setGate(perm.speechRecognition === "denied" ? "denied" : "explain");
+      } catch {
+        setListening(false);
+        toast(t("capture.micPaused"), { description: t("capture.micBody") });
+      }
+      return;
+    }
     const rec = getRecognition();
     if (!rec) return;
     rec.continuous = true;
@@ -416,8 +472,27 @@ function VoiceCapture() {
     setListening(true);
   };
 
+  const allowMic = async () => {
+    try {
+      const { SpeechRecognition } = await import("@capacitor-community/speech-recognition");
+      const perm = await SpeechRecognition.requestPermissions();
+      if (perm.speechRecognition !== "granted") {
+        setGate("denied");
+        return;
+      }
+      setGate(null);
+      await listenNative();
+    } catch {
+      setGate("denied");
+    }
+  };
+
   const stop = () => {
-    recRef.current?.stop();
+    if (native) {
+      void import("@capacitor-community/speech-recognition").then(({ SpeechRecognition }) => SpeechRecognition.stop()).catch(() => {});
+    } else {
+      recRef.current?.stop();
+    }
     setListening(false);
   };
 
@@ -442,6 +517,12 @@ function VoiceCapture() {
 
   return (
     <div className="space-y-3">
+      {gate === "explain" && (
+        <PermitCard title="permit.micTitle" body="permit.micWhy" onAllow={() => void allowMic()} onLater={() => setGate(null)} onSettings={() => void openAppSettings()} />
+      )}
+      {gate === "denied" && (
+        <PermitCard title="permit.micTitle" body="permit.micDenied" denied onAllow={() => {}} onLater={() => setGate(null)} onSettings={() => void openAppSettings()} />
+      )}
       <div className="flex min-h-24 items-start gap-3 rounded-2xl border border-border2 bg-card px-4 py-3">
         <span className={`mt-1 size-2.5 shrink-0 rounded-full ${listening ? "animate-breathe bg-teal" : "bg-dim"}`} />
         <p className="text-sm text-muted-foreground">
@@ -467,10 +548,34 @@ function VoiceCapture() {
 
 function PhotoCapture() {
   const t = useT();
+  const native = import.meta.env.VITE_NATIVE === "1";
   const { addCard } = useNowMode();
   const { closeSheet } = useUI();
   const [image, setImage] = useState<string | null>(null);
   const [caption, setCaption] = useState("");
+  const [gate, setGate] = useState<null | "camera" | "photos" | "denied-camera" | "denied-photos">(null);
+
+  const take = async (source: "camera" | "photos") => {
+    try {
+      const url = await takeOrChoosePhoto(source);
+      if (!url) {
+        setGate(null);
+        return;
+      }
+      setImage(await fileToSmallDataUrl(new File([await (await fetch(url)).blob()], "photo.jpg", { type: "image/jpeg" })));
+      setGate(null);
+    } catch (err) {
+      setGate(err instanceof PhotoDenied ? (source === "camera" ? "denied-camera" : "denied-photos") : null);
+    }
+  };
+  const beginPhoto = async (source: "camera" | "photos") => {
+    const access = await photoAccess(source);
+    if (access === "granted") {
+      await take(source);
+      return;
+    }
+    setGate(access === "denied" ? (source === "camera" ? "denied-camera" : "denied-photos") : source);
+  };
 
   const save = () => {
     if (!image) return;
@@ -482,7 +587,32 @@ function PhotoCapture() {
 
   return (
     <div className="space-y-3">
-      <label className="flex cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border border-dashed border-border2 bg-card px-4 py-6 text-center hover:bg-card2">
+      {gate === "camera" && (
+        <PermitCard title="permit.cameraTitle" body="permit.cameraWhy" onAllow={() => void take("camera")} onLater={() => setGate(null)} onSettings={() => void openAppSettings()} />
+      )}
+      {gate === "photos" && (
+        <PermitCard title="permit.photosTitle" body="permit.photosWhy" onAllow={() => void take("photos")} onLater={() => setGate(null)} onSettings={() => void openAppSettings()} />
+      )}
+      {(gate === "denied-camera" || gate === "denied-photos") && (
+        <PermitCard
+          title={gate === "denied-camera" ? "permit.cameraTitle" : "permit.photosTitle"}
+          body={gate === "denied-camera" ? "permit.cameraDenied" : "permit.photosDenied"}
+          denied
+          onAllow={() => {}}
+          onLater={() => setGate(null)}
+          onSettings={() => void openAppSettings()}
+        />
+      )}
+      {native ? (
+        <div className="grid grid-cols-2 gap-2">
+          <Button type="button" variant="secondary" className="h-11 rounded-xl" onClick={() => void beginPhoto("camera")}>{t("permit.cameraTitle")}</Button>
+          <Button type="button" variant="secondary" className="h-11 rounded-xl" onClick={() => void beginPhoto("photos")}>{t("permit.photosTitle")}</Button>
+        </div>
+      ) : null}
+      {native && image ? (
+        <img src={image} alt={t("capture.photoAlt")} className="max-h-40 rounded-xl object-contain" />
+      ) : null}
+      <label className={`flex cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border border-dashed border-border2 bg-card px-4 py-6 text-center hover:bg-card2 ${native ? "hidden" : ""}`}>
         {image ? (
           <img src={image} alt={t("capture.photoAlt")} className="max-h-40 rounded-xl object-contain" />
         ) : (

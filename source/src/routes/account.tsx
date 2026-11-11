@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { BellRing, Moon, LogOut, Palette, Timer } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Avatar } from "@/components/nowmode/Avatar";
 import { greetingName } from "@/lib/nowmode/profile";
 import { toast } from "sonner";
@@ -13,6 +13,10 @@ import { useLocale, useT } from "@/lib/i18n/context";
 import { formatLocaleTime } from "@/lib/i18n/format";
 import { LOCALES, type LocaleId } from "@/lib/i18n/locale";
 import { clearCustomSound, configureAlarm, playBlockChime, saveCustomSound, SOUND_IDS, unlockAlarm } from "@/lib/nowmode/alarm";
+import { PhotoDenied, forgetAlarmFile, openAppSettings, photoAccess, pickAlarmFile, storeAlarmFile, takeOrChoosePhoto } from "@/lib/nowmode/native-device";
+import { syncNativeReminders } from "@/lib/nowmode/native-sync";
+import { currentNotifyPermission, requestNotifyPermission } from "@/lib/nowmode/notify-permission";
+import { PermitCard } from "@/components/nowmode/PermitCard";
 import { useNowMode } from "@/lib/nowmode/store";
 import {
   DEFAULT_NUDGES,
@@ -33,6 +37,26 @@ export const Route = createFileRoute("/account")({
   }),
   component: Account,
 });
+
+async function compressDataUrl(raw: string): Promise<string | null> {
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("image"));
+      image.src = raw;
+    });
+    const scale = Math.min(1, 320 / Math.max(img.width, img.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    canvas.getContext("2d")?.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const small = canvas.toDataURL("image/jpeg", 0.7);
+    return small.length > 350_000 ? canvas.toDataURL("image/jpeg", 0.45) : small;
+  } catch {
+    return null;
+  }
+}
 
 async function compressImage(file: File): Promise<string | null> {
   try {
@@ -62,8 +86,36 @@ async function compressImage(file: File): Promise<string | null> {
 
 function ProfileCard() {
   const t = useT();
+  const native = import.meta.env.VITE_NATIVE === "1";
   const { state, setPrefs } = useNowMode();
   const prefs = state.prefs;
+  const [gate, setGate] = useState<null | "camera" | "photos" | "denied-camera" | "denied-photos">(null);
+  const usePhoto = async (source: "camera" | "photos") => {
+    try {
+      const url = await takeOrChoosePhoto(source);
+      if (!url) {
+        setGate(null);
+        return;
+      }
+      const small = await compressDataUrl(url);
+      if (!small || small.length > 350_000) {
+        toast(t("storage.full"), { description: t("profile.photoBig") });
+        return;
+      }
+      setPrefs({ avatar: small });
+      setGate(null);
+    } catch (err) {
+      setGate(err instanceof PhotoDenied ? (source === "camera" ? "denied-camera" : "denied-photos") : null);
+    }
+  };
+  const beginPhoto = async (source: "camera" | "photos") => {
+    const access = await photoAccess(source);
+    if (access === "granted") {
+      await usePhoto(source);
+      return;
+    }
+    setGate(access === "denied" ? (source === "camera" ? "denied-camera" : "denied-photos") : source);
+  };
   const name = greetingName(prefs);
   return (
     <section data-tour="account" className="space-y-3 rounded-[20px] border border-border2 bg-hero p-5">
@@ -107,8 +159,26 @@ function ProfileCard() {
           ))}
         </div>
       </fieldset>
+      {gate === "camera" && <PermitCard title="permit.cameraTitle" body="permit.cameraWhy" onAllow={() => void usePhoto("camera")} onLater={() => setGate(null)} onSettings={() => void openAppSettings()} />}
+      {gate === "photos" && <PermitCard title="permit.photosTitle" body="permit.photosWhy" onAllow={() => void usePhoto("photos")} onLater={() => setGate(null)} onSettings={() => void openAppSettings()} />}
+      {(gate === "denied-camera" || gate === "denied-photos") && (
+        <PermitCard
+          title={gate === "denied-camera" ? "permit.cameraTitle" : "permit.photosTitle"}
+          body={gate === "denied-camera" ? "permit.cameraDenied" : "permit.photosDenied"}
+          denied
+          onAllow={() => {}}
+          onLater={() => setGate(null)}
+          onSettings={() => void openAppSettings()}
+        />
+      )}
       <div className="flex flex-wrap gap-2">
-        <label className="inline-flex h-10 cursor-pointer items-center rounded-xl border border-border2 bg-card px-3 text-xs font-semibold">
+        {native && (
+          <>
+            <Button type="button" variant="secondary" className="h-10 rounded-xl" onClick={() => void beginPhoto("camera")}>{t("permit.cameraTitle")}</Button>
+            <Button type="button" variant="secondary" className="h-10 rounded-xl" onClick={() => void beginPhoto("photos")}>{t("permit.photosTitle")}</Button>
+          </>
+        )}
+        <label className={`inline-flex h-10 cursor-pointer items-center rounded-xl border border-border2 bg-card px-3 text-xs font-semibold ${native ? "hidden" : ""}`}>
           {t("profile.photoBtn")}
           <input
             type="file"
@@ -140,8 +210,44 @@ function ProfileCard() {
 function SoundSettings() {
   const t = useT();
   const { state, setPrefs } = useNowMode();
+  const native = import.meta.env.VITE_NATIVE === "1";
   const [note, setNote] = useState<string | null>(null);
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">("unsupported");
+  const [gate, setGate] = useState<null | "files" | "notify" | "denied-notify">(null);
+  const importSound = async () => {
+    unlockAlarm();
+    let picked: Awaited<ReturnType<typeof pickAlarmFile>>;
+    try {
+      picked = await pickAlarmFile();
+    } catch {
+      setNote(t("sound.bad"));
+      return;
+    }
+    if (!picked) {
+      setGate(null);
+      return;
+    }
+    const type = picked.type.startsWith("audio/") ? picked.type : "audio/mpeg";
+    const audio = picked.bytes.buffer.slice(picked.bytes.byteOffset, picked.bytes.byteOffset + picked.bytes.byteLength) as ArrayBuffer;
+    const file = new File([audio], picked.name, { type });
+    const result = await saveCustomSound(file);
+    if (result !== "ok") {
+      setNote(t(result === "big" ? "sound.big" : "sound.bad"));
+      return;
+    }
+    try {
+      await storeAlarmFile(picked.bytes, picked.ext);
+    } catch {
+      setNote(t("sound.bad"));
+      return;
+    }
+    setPrefs({ alarmSound: "custom" });
+    setNote(t("sound.imported"));
+    setGate(null);
+  };
+  useEffect(() => {
+    void currentNotifyPermission().then(setPerm);
+  }, []);
   const sound = state.prefs.alarmSound ?? "chime";
   const volume = state.prefs.alarmVolume ?? 60;
   const options = [...SOUND_IDS, ...(sound === "custom" ? (["custom"] as const) : [])];
@@ -191,6 +297,11 @@ function SoundSettings() {
         >
           {t("sound.preview")}
         </Button>
+        {native ? (
+          <Button type="button" variant="secondary" className="h-10 rounded-xl" onClick={() => setGate("files")}>
+            {t("sound.import")}
+          </Button>
+        ) : (
         <label className="inline-flex h-10 cursor-pointer items-center rounded-xl border border-border2 bg-card px-3 text-xs font-semibold">
           {t("sound.import")}
           <input
@@ -211,12 +322,14 @@ function SoundSettings() {
             }}
           />
         </label>
+        )}
         <Button
           type="button"
           variant="secondary"
           className="h-10 rounded-xl"
           onClick={() => {
             void clearCustomSound();
+            forgetAlarmFile();
             setPrefs({ alarmSound: "chime", alarmVolume: 60 });
             setNote(null);
           }}
@@ -224,22 +337,44 @@ function SoundSettings() {
           {t("sound.reset")}
         </Button>
       </div>
+      {gate === "files" && (
+        <PermitCard title="permit.filesTitle" body="permit.filesWhy" onAllow={() => void importSound()} onLater={() => setGate(null)} onSettings={() => void openAppSettings()} />
+      )}
+      {gate === "notify" && (
+        <PermitCard
+          title="permit.notifyTitle"
+          body="permit.notifyWhy"
+          onAllow={async () => {
+            const next = await requestNotifyPermission();
+            setPerm(next);
+            setGate(next === "granted" ? null : "denied-notify");
+            if (next === "granted") void syncNativeReminders(state);
+          }}
+          onLater={() => setGate(null)}
+          onSettings={() => void openAppSettings()}
+        />
+      )}
+      {gate === "denied-notify" && (
+        <PermitCard title="permit.notifyTitle" body="permit.notifyDenied" denied onAllow={() => {}} onLater={() => setGate(null)} onSettings={() => void openAppSettings()} />
+      )}
       {note && <p role="alert" className="text-xs text-coral">{note}</p>}
       <div className="space-y-2 border-t border-border pt-3">
         <button
           type="button"
           className="h-10 rounded-xl border border-border2 px-3 text-xs font-semibold"
           onClick={async () => {
-            if (typeof Notification === "undefined") {
-              setPerm("unsupported");
+            if (native && perm !== "granted") {
+              setGate("notify");
               return;
             }
-            setPerm(await Notification.requestPermission());
+            const next = await requestNotifyPermission();
+            setPerm(next);
+            if (next === "granted" && native) void syncNativeReminders(state);
           }}
         >
           {perm === "granted" ? t("sound.allowed") : t("sound.allow")}
         </button>
-        <p className="text-[11px] leading-relaxed text-dim">{t("sound.limit")}</p>
+        <p className="text-[11px] leading-relaxed text-dim">{import.meta.env.VITE_NATIVE === "1" ? t("sound.limitNative") : t("sound.limit")}</p>
       </div>
     </section>
   );
