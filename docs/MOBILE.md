@@ -4,7 +4,7 @@ The website at `https://mjspurrier.github.io/SparkAppDemo/` stays a hash-routed 
 
 Plans stay in `localStorage` under `nowmode-v1`. Installing the native app does not read the browser's storage, and opening the website does not wipe the app. Nothing in this setup resets that key.
 
-A brand-new phone install starts empty: no sample tasks, board notes, wins, reminders, or history. The GitHub Pages build still includes the demo day so a tester can look around. If `nowmode-v1` is already on the device, it is migrated and left in place.
+A brand-new visit starts empty on the website and on the phone: no sample tasks, board notes, wins, reminders, or history. The first screen asks for an email, a name, and a username. If `nowmode-v1` is already stored, it is migrated and left in place. The website and the Android app do not share that storage.
 
 ## Account screen
 

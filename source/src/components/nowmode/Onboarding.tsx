@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { InstallChoice } from "@/components/nowmode/InstallChoice";
 import { useT } from "@/lib/i18n/context";
 import { createDeviceAuth, validateAccount, type AccountFieldErrors, type AuthProvider } from "@/lib/nowmode/auth";
 import { hadSavedNowMode, useNowMode } from "@/lib/nowmode/store";
@@ -60,7 +61,8 @@ export function Onboarding({ auth = createDeviceAuth() }: { auth?: AuthProvider 
           });
         }}
       >
-        <h1 className="text-[28px] font-bold leading-tight tracking-tight">{t("onboard.title")}</h1>
+        <InstallChoice onBrowser={() => document.getElementById("signup-email")?.focus()} />
+        <h1 id="signup" className="mt-6 text-[28px] font-bold leading-tight tracking-tight">{t("onboard.title")}</h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{t("onboard.lead")}</p>
         <label className="mt-6 block text-xs font-semibold">
           {t("onboard.email")}
@@ -68,6 +70,7 @@ export function Onboarding({ auth = createDeviceAuth() }: { auth?: AuthProvider 
             type="email"
             autoComplete="email"
             autoCapitalize="none"
+            id="signup-email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             aria-invalid={!!errors.email}

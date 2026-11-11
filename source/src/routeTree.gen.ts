@@ -15,6 +15,7 @@ import { Route as BoardRouteImport } from './routes/board'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as FeedbackRouteImport } from './routes/feedback'
 import { Route as FocusRouteImport } from './routes/focus'
+import { Route as InstallRouteImport } from './routes/install'
 import { Route as MissionRouteImport } from './routes/mission'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as SupportRouteImport } from './routes/support'
@@ -50,6 +51,11 @@ const FocusRoute = FocusRouteImport.update({
   path: '/focus',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InstallRoute = InstallRouteImport.update({
+  id: '/install',
+  path: '/install',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MissionRoute = MissionRouteImport.update({
   id: '/mission',
   path: '/mission',
@@ -78,6 +84,7 @@ export interface FileRoutesByFullPath {
   '/calendar': typeof CalendarRoute
   '/feedback': typeof FeedbackRoute
   '/focus': typeof FocusRoute
+  '/install': typeof InstallRoute
   '/mission': typeof MissionRoute
   '/privacy': typeof PrivacyRoute
   '/support': typeof SupportRoute
@@ -90,6 +97,7 @@ export interface FileRoutesByTo {
   '/calendar': typeof CalendarRoute
   '/feedback': typeof FeedbackRoute
   '/focus': typeof FocusRoute
+  '/install': typeof InstallRoute
   '/mission': typeof MissionRoute
   '/privacy': typeof PrivacyRoute
   '/support': typeof SupportRoute
@@ -103,6 +111,7 @@ export interface FileRoutesById {
   '/calendar': typeof CalendarRoute
   '/feedback': typeof FeedbackRoute
   '/focus': typeof FocusRoute
+  '/install': typeof InstallRoute
   '/mission': typeof MissionRoute
   '/privacy': typeof PrivacyRoute
   '/support': typeof SupportRoute
@@ -117,6 +126,7 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/feedback'
     | '/focus'
+    | '/install'
     | '/mission'
     | '/privacy'
     | '/support'
@@ -129,6 +139,7 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/feedback'
     | '/focus'
+    | '/install'
     | '/mission'
     | '/privacy'
     | '/support'
@@ -141,6 +152,7 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/feedback'
     | '/focus'
+    | '/install'
     | '/mission'
     | '/privacy'
     | '/support'
@@ -154,6 +166,7 @@ export interface RootRouteChildren {
   CalendarRoute: typeof CalendarRoute
   FeedbackRoute: typeof FeedbackRoute
   FocusRoute: typeof FocusRoute
+  InstallRoute: typeof InstallRoute
   MissionRoute: typeof MissionRoute
   PrivacyRoute: typeof PrivacyRoute
   SupportRoute: typeof SupportRoute
@@ -204,6 +217,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FocusRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/install': {
+      id: '/install'
+      path: '/install'
+      fullPath: '/install'
+      preLoaderRoute: typeof InstallRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/mission': {
       id: '/mission'
       path: '/mission'
@@ -242,6 +262,7 @@ const rootRouteChildren: RootRouteChildren = {
   CalendarRoute: CalendarRoute,
   FeedbackRoute: FeedbackRoute,
   FocusRoute: FocusRoute,
+  InstallRoute: InstallRoute,
   MissionRoute: MissionRoute,
   PrivacyRoute: PrivacyRoute,
   SupportRoute: SupportRoute,

@@ -48,8 +48,8 @@ describe("native first install", () => {
     expect(next.prefs.username).toBe("ada");
     expect(next.prefs.quietHours).toBe(true);
     expect(stateForVisit(null, true).events).toEqual([]);
-    expect(stateForVisit(null, false).events.length).toBe(createSeed().events.length);
-    expect(stateForVisit(null, false).events.length).toBeGreaterThan(0);
+    expect(stateForVisit(null, false).events).toEqual([]);
+    expect(createSeed().events.length).toBeGreaterThan(0);
   });
 });
 

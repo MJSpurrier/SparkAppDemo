@@ -48,11 +48,11 @@ export function createEmpty(now = new Date()): AppState {
 
 /**
  * A saved blob always wins, on the phone and on the website.
- * Only a visit with nothing stored yet gets a fresh state: empty on native, demo on the Pages tester.
+ * A first visit with nothing stored yet starts empty in both places. The sign-up screen follows.
  */
-export function stateForVisit(saved: AppState | null, native: boolean, now = new Date()): AppState {
+export function stateForVisit(saved: AppState | null, _native: boolean, now = new Date()): AppState {
   if (saved) return saved;
-  return native ? createEmpty(now) : createSeed(now);
+  return createEmpty(now);
 }
 
 export function createSeed(now = new Date()): AppState {
