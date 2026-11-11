@@ -39,7 +39,7 @@ npx @capacitor/assets generate --android --ios \
   --splashBackgroundColor '#121117' --splashBackgroundColorDark '#121117'
 ```
 
-The five reminder tones are `source/resources/sounds/*.wav`, copied to `android/app/src/main/res/raw/` and into the iOS app bundle. An imported sound cannot be bundled ahead of time, so the phone plays its default tone for that choice.
+The five reminder tones are `source/resources/sounds/*.wav`, copied to `android/app/src/main/res/raw/` and into the iOS app bundle. An imported mp3, m4a, wav, ogg, or webm is chosen with the system file picker (Files, Downloads, Drive) and copied into app storage. On Android that copy lives in `ln_sounds/` and is attached to a notification channel named `sound_` plus the file name without its extension. On iOS the copy lives in `Library/Sounds`. Replacing the file deletes that Android channel so the next reminder uses the new audio. The file must be 1.5 MB or smaller. Latin American Spanish speech recognition uses `es-MX` because Android has no `es-419` recognizer. Spain stays `es-ES`. English uses `en-US`.
 
 ## Reminders when the app is closed
 
@@ -55,6 +55,8 @@ On the phone, Now Mode schedules local notifications from the same rules as the 
 Edits and deletes rebuild the schedule: removed items are cancelled and changed times are replaced. The horizon is 14 days and at most 48 pending notifications, soonest first, so iOS does not hit its cap. Android can hold more, but the same cap keeps both platforms predictable. While the phone is in deep idle, Android may still space exact alarms about nine minutes apart.
 
 The first time a reminder is scheduled, Android 12+ can open **Alarms & reminders** if exact alarms are not allowed yet. Android 13+ also needs the notification permission (`POST_NOTIFICATIONS`), which **Allow notifications** in Settings and on a task requests. The website still uses the browser permission only, and a closed tab still cannot deliver a reminder.
+
+The installed app also asks, at first use, for the microphone (speech-to-text), the camera, and photos. Each request starts with a short explanation in English, Latin American Spanish, or Spain Spanish. Saying no keeps the feature off and offers a button that opens the app's system settings. The website keeps the Web Speech API and ordinary file inputs. Android declares `RECORD_AUDIO`, `CAMERA`, `READ_MEDIA_IMAGES`, `READ_MEDIA_AUDIO`, and `READ_EXTERNAL_STORAGE` (max SDK 32). The WebView still grants `getUserMedia` only after those runtime permissions. iOS usage strings cover the microphone, speech recognition, the camera, and the photo library.
 
 ## Remote announcements
 

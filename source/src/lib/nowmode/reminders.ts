@@ -20,7 +20,7 @@ export interface PlannedNotification {
   at: number;
   title: string;
   body: string;
-  /** Built-in sound id. Null uses the phone default, including imported sounds. */
+  /** Built-in sound id. Null uses an imported file when one is stored. */
   sound: string | null;
   channelId: string;
   kind: ReminderKind;

@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { unlockAlarm } from "@/lib/nowmode/alarm";
 import { syncNativeReminders } from "@/lib/nowmode/native-sync";
 import { currentNotifyPermission, requestNotifyPermission } from "@/lib/nowmode/notify-permission";
+import { openAppSettings } from "@/lib/nowmode/native-device";
+import { PermitCard } from "@/components/nowmode/PermitCard";
 import {
   NUDGE_TIERS,
   eventsOn,
@@ -278,7 +280,9 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
   const navigate = useNavigate();
   const openTimer = useActivityTimer();
   const [showNudges, setShowNudges] = useState(false);
+  const native = import.meta.env.VITE_NATIVE === "1";
   const [perm, setPerm] = useState<NotificationPermission | "unsupported">("unsupported");
+  const [askNotify, setAskNotify] = useState<null | "explain" | "denied">(null);
   useEffect(() => {
     void currentNotifyPermission().then(setPerm);
   }, []);
@@ -476,19 +480,43 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
                 variant="ghost"
                 size="sm"
                 className="flex-1 rounded-lg text-muted-foreground"
-                onClick={async () => {
-                  const p = await requestNotifyPermission();
-                  setPerm(p);
-                  if (p === "granted" && import.meta.env.VITE_NATIVE === "1") void syncNativeReminders(state);
-                  toast(p === "granted" ? t("today.browserOn") : t("today.browserOff"), {
-                    description: p === "granted" ? t("today.browserOnBody") : t("today.browserOffBody"),
-                  });
+                onClick={() => {
+                  if (native) {
+                    setAskNotify("explain");
+                    return;
+                  }
+                  void (async () => {
+                    const p = await requestNotifyPermission();
+                    setPerm(p);
+                    toast(p === "granted" ? t("today.browserOn") : t("today.browserOff"), {
+                      description: p === "granted" ? t("today.browserOnBody") : t("today.browserOffBody"),
+                    });
+                  })();
                 }}
               >
                 {t("today.allow")}
               </Button>
             )}
           </div>
+          {askNotify === "explain" && (
+            <PermitCard
+              title="permit.notifyTitle"
+              body="permit.notifyWhy"
+              onAllow={() => {
+                void (async () => {
+                  const p = await requestNotifyPermission();
+                  setPerm(p);
+                  setAskNotify(p === "granted" ? null : "denied");
+                  if (p === "granted") void syncNativeReminders(state);
+                })();
+              }}
+              onLater={() => setAskNotify(null)}
+              onSettings={() => void openAppSettings()}
+            />
+          )}
+          {askNotify === "denied" && (
+            <PermitCard title="permit.notifyTitle" body="permit.notifyDenied" denied onAllow={() => {}} onLater={() => setAskNotify(null)} onSettings={() => void openAppSettings()} />
+          )}
         </div>
       )}
     </section>
