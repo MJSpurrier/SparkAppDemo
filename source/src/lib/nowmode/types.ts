@@ -139,6 +139,20 @@ export interface Win {
   kind?: "small" | "big";
   note?: string;
   eventId?: string;
+  /** Set when a finished goal created this win, so unchecking can remove it. */
+  goalId?: string;
+}
+
+export interface Goal {
+  id: string;
+  title: string;
+  /** YYYY-MM-DD. Missing means there is no due date yet. */
+  due?: string;
+  done: boolean;
+  /** YYYY-MM-DD when it was checked. */
+  doneOn?: string;
+  /** Big win created by that check, removed if the goal is opened again. */
+  winId?: string;
 }
 
 export interface FocusState {
@@ -181,4 +195,6 @@ export interface AppState {
   firedNudges: string[];
   /** Recurring habits and appointment reminders. Missing on older saves means none. */
   series?: RecurrenceRule[];
+  /** Finish lines with an optional due date. Missing on older saves means none. */
+  goals?: Goal[];
 }

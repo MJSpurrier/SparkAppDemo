@@ -1,5 +1,5 @@
 import { eventDate, formatTime, toDateKey } from "./logic";
-import type { AppState, FocusState, NowEvent, RecurrenceRule, ScheduleType, Win } from "./types";
+import type { AppState, FocusState, Goal, NowEvent, RecurrenceRule, ScheduleType, Win } from "./types";
 
 export const MAX_BLOCK_MINUTES = 12 * 60;
 
@@ -242,6 +242,7 @@ export function migrateWin(raw: Partial<Win> & Pick<Win, "id" | "label">): Win {
     kind: raw.kind === "big" ? "big" : "small",
     note: typeof raw.note === "string" && raw.note.trim() ? raw.note : undefined,
     eventId: typeof raw.eventId === "string" ? raw.eventId : undefined,
+    goalId: typeof raw.goalId === "string" ? raw.goalId : undefined,
   };
 }
 
@@ -370,5 +371,24 @@ export function migrateAppState(raw: unknown, now = Date.now()): AppState | null
     focus,
     firedNudges: Array.isArray(parsed.firedNudges) ? parsed.firedNudges : [],
     series: migrateSeries(parsed.series),
+    goals: migrateGoals(parsed.goals),
   };
+}
+
+function migrateGoals(raw: unknown): Goal[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const goal = item as Partial<Goal>;
+    if (typeof goal.id !== "string" || typeof goal.title !== "string" || !goal.title.trim()) return [];
+    const due = typeof goal.due === "string" && /^\d{4}-\d{2}-\d{2}$/.test(goal.due) ? goal.due : undefined;
+    return [{
+      id: goal.id,
+      title: goal.title.trim(),
+      due,
+      done: goal.done === true,
+      doneOn: typeof goal.doneOn === "string" ? goal.doneOn : undefined,
+      winId: typeof goal.winId === "string" ? goal.winId : undefined,
+    } satisfies Goal];
+  });
 }

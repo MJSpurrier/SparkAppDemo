@@ -2,17 +2,18 @@ import { translate } from "@/lib/i18n/context";
 import { formatLocaleTime } from "@/lib/i18n/format";
 import type { LocaleId } from "@/lib/i18n/locale";
 import { SOUND_IDS } from "./alarm";
-import { NUDGE_TIERS, eventDate, type NudgeKey } from "./logic";
+import { NUDGE_TIERS, eventDate, toDateKey, type NudgeKey } from "./logic";
 import { eventEndMs } from "./schedule";
 import { DEFAULT_QUIET_END, DEFAULT_QUIET_START, effectiveBoardReviewTime, isQuietAt, nudgeTierAllowed } from "./settings";
-import type { FocusState, NowEvent, Prefs } from "./types";
+import { checkInClock, checkInMoment, goalReminderAt } from "./goals";
+import type { FocusState, Goal, NowEvent, Prefs } from "./types";
 
 /** How far ahead a closed app can be given reminders. The list is rebuilt on every edit. */
 export const REMINDER_HORIZON_MS = 14 * 24 * 60 * 60 * 1000;
 /** Leave headroom under the iOS pending-notification cap. Soonest times win. */
 export const REMINDER_LIMIT = 48;
 
-export type ReminderKind = "nudge" | "review" | "alarm";
+export type ReminderKind = "nudge" | "review" | "alarm" | "checkin" | "goal";
 
 export interface PlannedNotification {
   id: number;
@@ -76,6 +77,7 @@ export interface ReminderInput {
   events: NowEvent[];
   prefs: Prefs;
   focus?: Pick<FocusState, "running" | "endsAt" | "label"> | null;
+  goals?: Goal[];
   now: Date;
   locale: LocaleId;
   horizonMs?: number;
@@ -177,6 +179,39 @@ export function planReminders(input: ReminderInput): PlannedNotification[] {
         translate(input.locale, "alarm.doneBody", { title: ev.title }),
         sound,
         "alarm",
+      ),
+    );
+  }
+
+  for (let day = 0; day <= 14; day += 1) {
+    const date = new Date(input.now.getFullYear(), input.now.getMonth(), input.now.getDate() + day);
+    const when = checkInMoment(input.prefs, date);
+    if (!when) continue;
+    if (quietAt(input.prefs, when)) continue;
+    push(
+      draft(
+        `checkin:${toDateKey(date)}:${checkInClock(input.prefs)}`,
+        when.getTime(),
+        title,
+        translate(input.locale, "checkin.body"),
+        sound,
+        "checkin",
+      ),
+    );
+  }
+
+  for (const goal of input.goals ?? []) {
+    if (goal.done || !goal.due) continue;
+    const when = goalReminderAt(goal.due);
+    if (!when || quietAt(input.prefs, when)) continue;
+    push(
+      draft(
+        `goal:${goal.id}:${goal.due}`,
+        when.getTime(),
+        title,
+        translate(input.locale, "goal.remind", { title: goal.title }),
+        sound,
+        "goal",
       ),
     );
   }

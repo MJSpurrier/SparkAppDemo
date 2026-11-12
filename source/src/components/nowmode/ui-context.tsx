@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
 
 export type SheetMode = "all" | "board";
-export type SheetTab = "menu" | "text" | "voice" | "photo";
+export type SheetTab = "menu" | "text" | "voice" | "photo" | "goal";
 export type TimerRequest = { kind: "block" | "free"; eventId: string; minutes?: number } | null;
 
 interface UIState {

@@ -83,6 +83,7 @@ export async function syncNativeReminders(state: AppState): Promise<void> {
     events: state.events,
     prefs: state.prefs,
     focus: state.focus,
+    goals: state.goals ?? [],
     now: new Date(),
     locale,
   });

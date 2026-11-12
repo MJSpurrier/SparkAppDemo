@@ -1,0 +1,1 @@
+import{u as a,m as n,j as s,af as o}from"./index-DXH8lPVH.js";import{S as i}from"./ScreenHeader-B6_ben-n.js";function c(){const e=a(),t=n();return s.jsxs("div",{className:"pb-10",children:[s.jsx(i,{back:!0,title:e("install.title")}),s.jsx("div",{className:"px-5",children:s.jsx(o,{onBrowser:()=>void t({to:"/"})})})]})}export{c as component};

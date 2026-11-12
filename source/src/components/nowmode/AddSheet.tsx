@@ -1,4 +1,4 @@
-import { Camera, ChevronLeft, Mic, MicOff, Type, X } from "lucide-react";
+import { Camera, ChevronLeft, Flag, Mic, MicOff, Type, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -57,6 +57,7 @@ const options = [
   { tab: "text" as const, label: "capture.text" as const, hint: "capture.textHint" as const, icon: Type, tone: "text-blue" },
   { tab: "voice" as const, label: "capture.voice" as const, hint: "capture.voiceHint" as const, icon: Mic, tone: "text-teal" },
   { tab: "photo" as const, label: "capture.photo" as const, hint: "capture.photoHint" as const, icon: Camera, tone: "text-coral" },
+  { tab: "goal" as const, label: "capture.goal" as const, hint: "capture.goalHint" as const, icon: Flag, tone: "text-green" },
 ];
 
 export function AddSheet() {
@@ -116,8 +117,8 @@ export function AddSheet() {
         </div>
 
         {sheetTab === "menu" && (
-          <div className="grid grid-cols-3 gap-3">
-            {options.map(({ tab, label, hint, icon: Icon, tone }) => (
+          <div className={`grid gap-3 ${sheetMode === "board" ? "grid-cols-3" : "grid-cols-2"}`}>
+            {options.filter((option) => sheetMode === "all" || option.tab !== "goal").map(({ tab, label, hint, icon: Icon, tone }) => (
               <button
                 key={tab}
                 type="button"
@@ -136,6 +137,7 @@ export function AddSheet() {
         {sheetTab === "text" && <TextCapture />}
         {sheetTab === "voice" && <VoiceCapture />}
         {sheetTab === "photo" && <PhotoCapture />}
+        {sheetTab === "goal" && <GoalCapture />}
       </div>
     </div>
   );
@@ -643,5 +645,51 @@ function PhotoCapture() {
         {t("capture.pin")}
       </Button>
     </div>
+  );
+}
+
+function GoalCapture() {
+  const t = useT();
+  const { addGoal } = useNowMode();
+  const { closeSheet } = useUI();
+  const [title, setTitle] = useState("");
+  const [due, setDue] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <form
+      className="space-y-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!title.trim()) {
+          setError(t("goal.need"));
+          return;
+        }
+        addGoal({ title, due: due || undefined });
+        toast(t("goal.save"));
+        closeSheet();
+      }}
+    >
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        placeholder={t("goal.titlePh")}
+        aria-label={t("capture.goal")}
+        className="h-11 w-full rounded-xl border border-border2 bg-card px-4 text-sm placeholder:text-dim focus:border-blue focus:outline-none"
+      />
+      <label className="block text-xs font-semibold">
+        {t("goal.due")}
+        <input
+          type="date"
+          value={due}
+          onChange={(e) => setDue(e.target.value)}
+          className="mt-1 h-11 w-full rounded-xl border border-border2 bg-card px-3 text-sm"
+        />
+      </label>
+      {error && <p className="text-xs text-coral">{error}</p>}
+      <Button type="submit" size="lg" className="h-12 w-full rounded-xl">
+        {t("goal.save")}
+      </Button>
+    </form>
   );
 }
