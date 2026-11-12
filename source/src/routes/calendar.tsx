@@ -10,10 +10,11 @@ import { IconButton, MenuButton } from "@/components/nowmode/ScreenHeader";
 import { TypeBadge } from "@/components/nowmode/ScheduleTypeField";
 import { useUI } from "@/components/nowmode/ui-context";
 import { unlockAlarm } from "@/lib/nowmode/alarm";
+import { goalCountdown, goalsInView } from "@/lib/nowmode/goals";
 import { countByDate, eventsOn, toDateKey } from "@/lib/nowmode/logic";
 import { focusSwitchGate, hasDuration, planBlockTimer, scheduleOf } from "@/lib/nowmode/schedule";
 import { useNowMode } from "@/lib/nowmode/store";
-import type { NowEvent } from "@/lib/nowmode/types";
+import type { Goal, NowEvent } from "@/lib/nowmode/types";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/calendar")({
@@ -33,7 +34,7 @@ export const Route = createFileRoute("/calendar")({
 function CalendarScreen() {
   const t = useT();
   const locale = useLocale();
-  const { ready, state } = useNowMode();
+  const { ready, state, setGoalDone, updateGoal, deleteGoal } = useNowMode();
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   if (!ready) return <Loading />;
@@ -108,11 +109,111 @@ function CalendarScreen() {
             );
           })}
         </div>
+        <GoalsList
+          goals={goalsInView(state.goals ?? [], first.getFullYear(), first.getMonth(), todayKey)}
+          today={todayKey}
+          onDone={setGoalDone}
+          onSave={updateGoal}
+          onDelete={deleteGoal}
+        />
         <p className="mt-5 text-center text-xs text-dim">
           {t("cal.tap")}
         </p>
       </div>
     </div>
+  );
+}
+
+function GoalsList({
+  goals,
+  today,
+  onDone,
+  onSave,
+  onDelete,
+}: {
+  goals: Goal[];
+  today: string;
+  onDone: (id: string, done: boolean) => void;
+  onSave: (id: string, input: { title: string; due?: string }) => void;
+  onDelete: (id: string) => void;
+}) {
+  const t = useT();
+  const [editing, setEditing] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [due, setDue] = useState("");
+  return (
+    <details className="mt-5 rounded-2xl border border-border2 bg-card px-4 py-3 text-foreground" defaultOpen={goals.some((goal) => !goal.done && !!goal.due && goal.due <= today)}>
+      <summary className="cursor-pointer text-sm font-bold">{t("goal.heading")}</summary>
+      {goals.length === 0 ? (
+        <p className="mt-3 text-sm text-muted-foreground">{t("goal.empty")}</p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {goals.map((goal) => {
+            const count = goalCountdown(goal.due, today);
+            return (
+              <li key={goal.id} className="rounded-xl border border-border2 bg-background px-3 py-2">
+                <div className="flex items-start gap-3">
+                  <button
+                    type="button"
+                    aria-label={t(goal.done ? "goal.reopen" : "goal.done")}
+                    aria-pressed={goal.done}
+                    onClick={() => onDone(goal.id, !goal.done)}
+                    className={cn(
+                      "mt-0.5 grid size-6 shrink-0 place-items-center rounded-full border",
+                      goal.done ? "border-green bg-green text-ink" : "border-border2 text-transparent",
+                    )}
+                  >
+                    <Check className="size-3.5" />
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <p className={cn("text-sm font-semibold", goal.done && "text-dim line-through")}>{goal.title}</p>
+                    <p className="text-xs text-muted-foreground">{t(count.key, count.n == null ? undefined : { n: count.n })}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-muted-foreground"
+                    onClick={() => {
+                      setEditing(goal.id);
+                      setTitle(goal.title);
+                      setDue(goal.due ?? "");
+                    }}
+                  >
+                    {t("goal.edit")}
+                  </button>
+                </div>
+                {editing === goal.id && (
+                  <form
+                    className="mt-2 space-y-2"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      if (!title.trim()) return;
+                      onSave(goal.id, { title, due: due || undefined });
+                      setEditing(null);
+                    }}
+                  >
+                    <input value={title} onChange={(e) => setTitle(e.target.value)} aria-label={t("capture.goal")} className="h-10 w-full rounded-xl border border-border2 bg-card px-3 text-sm" />
+                    <input type="date" value={due} onChange={(e) => setDue(e.target.value)} aria-label={t("goal.due")} className="h-10 w-full rounded-xl border border-border2 bg-card px-3 text-sm" />
+                    <div className="flex gap-2">
+                      <button type="submit" className="h-10 flex-1 rounded-xl bg-primary text-sm font-semibold text-primary-foreground">{t("goal.save")}</button>
+                      <button
+                        type="button"
+                        className="h-10 rounded-xl border border-border2 px-3 text-sm font-semibold text-coral"
+                        onClick={() => {
+                          onDelete(goal.id);
+                          setEditing(null);
+                        }}
+                      >
+                        {t("goal.delete")}
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </details>
   );
 }
 

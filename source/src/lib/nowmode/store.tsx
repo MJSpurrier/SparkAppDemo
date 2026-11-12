@@ -34,6 +34,7 @@ import {
 } from "./schedule";
 import { creditFocusSession } from "./focus-credit";
 import { deleteSeriesKeepingHistory, editSeriesScope, materializeSeries, removeOccurrence, skipOneOccurrence } from "./recurrence";
+import { checkInFire, goalReminderFire } from "./goals";
 import { stateForVisit } from "./seed";
 import type { RecurrenceRule } from "./types";
 import {
@@ -47,7 +48,7 @@ import {
   parseCustomDuration,
   shouldLeadWarn,
 } from "./settings";
-import type { AppState, BoardCard, Energy, FocusState, NowEvent, Prefs, ScheduleType } from "./types";
+import type { AppState, BoardCard, Energy, FocusState, Goal, NowEvent, Prefs, ScheduleType } from "./types";
 
 export const STORAGE_KEY = "nowmode-v1";
 
@@ -161,6 +162,11 @@ interface Store {
   splitTask: (id: string) => void;
   setSteps: (id: string, steps: NowEvent["steps"]) => void;
   addBigWin: (input: { label: string; date: string; note?: string }) => void;
+  addGoal: (input: { title: string; due?: string }) => void;
+  updateGoal: (id: string, input: { title: string; due?: string }) => void;
+  deleteGoal: (id: string) => void;
+  setGoalDone: (id: string, done: boolean) => void;
+  rescheduleGoal: (id: string, due: string) => void;
   setCustomParts: (hours: number, minutes: number) => ReturnType<typeof parseCustomDuration>;
   toggleStep: (eventId: string, stepId: string) => void;
   toggleNudge: (eventId: string, key: NudgeKey) => void;
@@ -227,7 +233,7 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready || import.meta.env.VITE_NATIVE !== "1") return;
     void syncNativeReminders(stateRef.current).catch(() => {});
-  }, [ready, state.events, state.prefs, state.focus.endsAt, state.focus.running, state.focus.label]);
+  }, [ready, state.events, state.goals, state.prefs, state.focus.endsAt, state.focus.running, state.focus.label]);
 
   useEffect(() => {
     if (!ready) return;
@@ -409,6 +415,19 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
         fired.push(review.key);
         if (review.notify) notify(translate(localeOf(s.prefs), "board.reviewNow"));
       }
+      const checkin = checkInFire(now, s.prefs, [...s.firedNudges, ...fired]);
+      if (checkin.record) {
+        fired.push(checkin.key);
+        if (checkin.notify) notify(translate(localeOf(s.prefs), "checkin.body"), { title: translate(localeOf(s.prefs), "checkin.title") });
+      }
+      for (const goal of s.goals ?? []) {
+        const due = goalReminderFire(now, goal, [...s.firedNudges, ...fired]);
+        if (!due.record) continue;
+        fired.push(due.key);
+        if (due.notify && !quietNow(s.prefs, now)) {
+          notify(translate(localeOf(s.prefs), "goal.remind", { title: goal.title }), { title: translate(localeOf(s.prefs), "goal.remindTitle") });
+        }
+      }
       if (fired.length) {
         setState((p) => ({ ...p, firedNudges: [...p.firedNudges, ...fired].slice(-300) }));
       }
@@ -446,6 +465,54 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
       splitTask: (id) =>
         updateEvent(id, (e) => (e.steps?.length ? e : { ...e, steps: splitIntoSteps(e.title) })),
       setSteps: (id, steps) => updateEvent(id, (e) => ({ ...e, steps })),
+      addGoal: (input) => {
+        const title = input.title.trim();
+        if (!title) return;
+        const due = input.due && /^\d{4}-\d{2}-\d{2}$/.test(input.due) ? input.due : undefined;
+        update((s) => ({ ...s, goals: [...(s.goals ?? []), { id: uid(), title, due, done: false }] }));
+      },
+      updateGoal: (id, input) => {
+        const title = input.title.trim();
+        if (!title) return;
+        const due = input.due && /^\d{4}-\d{2}-\d{2}$/.test(input.due) ? input.due : undefined;
+        update((s) => ({
+          ...s,
+          goals: (s.goals ?? []).map((goal) => (goal.id === id ? { ...goal, title, due } : goal)),
+        }));
+      },
+      deleteGoal: (id) =>
+        update((s) => {
+          const goal = (s.goals ?? []).find((item) => item.id === id);
+          return {
+            ...s,
+            goals: (s.goals ?? []).filter((item) => item.id !== id),
+            wins: s.wins.filter((win) => win.goalId !== id && win.id !== goal?.winId),
+          };
+        }),
+      setGoalDone: (id, done) =>
+        setState((s) => {
+          const goal = (s.goals ?? []).find((item) => item.id === id);
+          if (!goal || goal.done === done) return s;
+          if (done) {
+            const winId = uid();
+            const finished: Goal = { ...goal, done: true, doneOn: toDateKey(new Date()), winId };
+            return {
+              ...s,
+              goals: (s.goals ?? []).map((item) => (item.id === id ? finished : item)),
+              wins: [...s.wins, { id: winId, date: finished.doneOn!, label: goal.title, kind: "big" as const, goalId: id }],
+            };
+          }
+          return {
+            ...s,
+            goals: (s.goals ?? []).map((item) => (item.id === id ? { ...item, done: false, doneOn: undefined, winId: undefined } : item)),
+            wins: s.wins.filter((win) => win.goalId !== id && win.id !== goal.winId),
+          };
+        }),
+      rescheduleGoal: (id, due) =>
+        update((s) => ({
+          ...s,
+          goals: (s.goals ?? []).map((goal) => (goal.id === id ? { ...goal, due, done: false, doneOn: undefined, winId: undefined } : goal)),
+        })),
       addBigWin: (input) =>
         update((s) => ({
           ...s,

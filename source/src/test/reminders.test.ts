@@ -75,7 +75,7 @@ describe("native reminder plan", () => {
     const removed = planReminders({ now, locale: "en", prefs, events: [] });
     const diff = reconcileReminders(during, removed);
     expect(diff.cancel.map((item) => item.id)).toEqual(during.map((item) => item.id));
-    expect(diff.schedule).toEqual([]);
+    expect(diff.schedule.every((item) => item.kind === "checkin")).toBe(true);
   });
 
   it("cancels the old time and schedules the new one when an event moves", () => {
@@ -145,10 +145,10 @@ describe("native reminder plan", () => {
       focus: { running: true, endsAt: now.getTime() + 25 * 60_000, label: "Essay" },
       events: [],
     });
-    expect(custom).toHaveLength(1);
-    expect(custom[0].kind).toBe("alarm");
-    expect(custom[0].sound).toBeNull();
-    expect(custom[0].body).toContain("Essay");
+    const alarms = custom.filter((item) => item.kind === "alarm");
+    expect(alarms).toHaveLength(1);
+    expect(alarms[0].sound).toBeNull();
+    expect(alarms[0].body).toContain("Essay");
 
     const quietFocus = planReminders({
       now: new Date(2026, 10, 12, 23, 0, 0),
@@ -157,7 +157,7 @@ describe("native reminder plan", () => {
       focus: { running: true, endsAt: new Date(2026, 10, 12, 23, 20, 0).getTime(), label: "Essay" },
       events: [],
     });
-    expect(quietFocus).toEqual([]);
+    expect(quietFocus.some((item) => item.kind === "alarm")).toBe(false);
   });
 
   it("keeps only the soonest reminders when the list is full", () => {

@@ -43,6 +43,7 @@ export function createEmpty(now = new Date()): AppState {
     focus: defaultFocus(),
     firedNudges: [],
     series: [],
+    goals: [],
   };
 }
 
@@ -123,5 +124,6 @@ export function createSeed(now = new Date()): AppState {
       endPromptFor: null,
     },
     firedNudges: [],
+    goals: [],
   };
 }
