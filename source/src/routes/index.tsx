@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Bell, BellRing, Check, ChevronDown, Clock3, Moon, Scissors, Sparkles, Zap } from "lucide-react";
+import { Bell, BellRing, Check, ChevronDown, Clock3, Moon, Scissors, Sparkles, X, Zap } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -21,10 +21,10 @@ import {
   NUDGE_TIERS,
   eventsOn,
   formatMMSS,
-  nextUp,
   toDateKey,
 } from "@/lib/nowmode/logic";
 import { greetingName } from "@/lib/nowmode/profile";
+import { dayProgress, followUpWhen, letGoCopy, taskAskState } from "@/lib/nowmode/today-flow";
 import { eventEndClock, focusSwitchGate, formatRange, hasDuration, planBlockTimer, scheduleOf } from "@/lib/nowmode/schedule";
 import { useNow, useNowMode } from "@/lib/nowmode/store";
 import type { Energy, FocusState, NowEvent } from "@/lib/nowmode/types";
@@ -47,21 +47,31 @@ export const Route = createFileRoute("/")({
 function Today() {
   const t = useT();
   const locale = useLocale();
-  const { ready, state, setEnergy } = useNowMode();
+  const { ready, state, setEnergy, toggleDone, declineTask, placeFollowUp } = useNowMode();
+  const { openScheduleCopy } = useUI();
   const now = useNow(1000);
   const [completedOpen, setCompletedOpen] = useState(false);
+  const [offerId, setOfferId] = useState<string | null>(null);
+  const asked = eventsOn(state.events, toDateKey(now)).filter((ev) => taskAskState(ev, now) === "ask").length;
+  useEffect(() => {
+    if (asked > 0) setCompletedOpen(true);
+  }, [asked]);
   if (!ready) return <Loading />;
 
   const todayKey = toDateKey(now);
   const today = eventsOn(state.events, todayKey);
-  const up = nextUp(state.events, todayKey);
-  const doneCount = today.filter((e) => e.done).length;
-  const rest = today.filter((e) => !e.done && e.id !== up?.id);
-  const completed = today.filter((e) => e.done);
+  const asks = today.filter((ev) => taskAskState(ev, now) === "ask");
+  const declined = today.filter((ev) => taskAskState(ev, now) === "no");
+  const upcoming = today.filter((ev) => taskAskState(ev, now) === "upcoming" || taskAskState(ev, now) === "open");
+  const up = upcoming.find((ev) => !ev.done) ?? null;
+  const progress = dayProgress(today, now, state.prefs);
+  const doneCount = progress.done;
+  const rest = upcoming.filter((ev) => ev.id !== up?.id && !ev.done);
+  const completed = today.filter((ev) => ev.done);
   const hello = greetingName(state.prefs);
-  const left = today.filter((e) => !e.done && e.id !== up?.id).length;
+  const left = rest.length;
   const wins = state.wins.filter((w) => w.date === todayKey).length;
-  const allClear = !up;
+  const allClear = !up && asks.length === 0;
   const kicker = formatLocaleDate(now, locale, { weekday: "long", month: "short", day: "numeric" });
 
   return (
@@ -109,13 +119,13 @@ function Today() {
             <div className="h-1.5 overflow-hidden rounded-full bg-card2">
               <div
                 className="h-full rounded-full bg-teal transition-[width] duration-500"
-                style={{ width: `${today.length ? (doneCount / today.length) * 100 : 0}%` }}
+                style={{ width: `${Math.round(progress.fill * 100)}%` }}
               />
             </div>
             <div className="flex items-center justify-between gap-2 text-xs">
               <span className="inline-flex items-center gap-1 text-muted-foreground">
                 <ChevronDown className={cn("size-3.5 transition-transform", completedOpen && "rotate-180")} aria-hidden />
-                {t("today.handled", { done: doneCount, total: today.length })}
+                {t("today.progress", { done: doneCount, total: today.length })}
               </span>
               <span className="inline-flex items-center gap-1 font-semibold text-green">
                 <Sparkles className="size-3.5" /> {t(wins === 1 ? "today.win" : "today.wins", { n: wins })}
@@ -124,6 +134,53 @@ function Today() {
           </button>
           {completedOpen && (
             <div className="space-y-2">
+              {asks.length > 0 && (
+                <div className="space-y-2">
+                  <h2 className="px-1 text-sm font-semibold">{t("today.ask")}</h2>
+                  {asks.map((ev) => (
+                    <AskRow
+                      key={ev.id}
+                      ev={ev}
+                      onYes={() => toggleDone(ev.id)}
+                      onNo={() => {
+                        declineTask(ev.id);
+                        toast(letGoCopy(locale, `${ev.id}:${todayKey}`));
+                        if (scheduleOf(ev) === "fixed") setOfferId(ev.id);
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+              {offerId && state.events.some((ev) => ev.id === offerId) && (
+                <RescheduleOffer
+                  ev={state.events.find((ev) => ev.id === offerId)!}
+                  onTomorrow={() => {
+                    const ev = state.events.find((item) => item.id === offerId);
+                    if (!ev) return;
+                    placeFollowUp(ev.id, followUpWhen(now, "tomorrow", ev.time));
+                    setOfferId(null);
+                  }}
+                  onWeek={() => {
+                    const ev = state.events.find((item) => item.id === offerId);
+                    if (!ev) return;
+                    placeFollowUp(ev.id, followUpWhen(now, "week", ev.time));
+                    setOfferId(null);
+                  }}
+                  onPick={() => {
+                    openScheduleCopy(offerId);
+                    setOfferId(null);
+                  }}
+                  onSkip={() => setOfferId(null)}
+                />
+              )}
+              {declined.length > 0 && (
+                <div className="space-y-2">
+                  <h2 className="px-1 text-sm font-semibold">{t("today.notThis")}</h2>
+                  {declined.map((ev) => (
+                    <EventRow key={ev.id} ev={ev} />
+                  ))}
+                </div>
+              )}
               <h2 className="px-1 text-sm font-semibold">{t("today.completed")}</h2>
               {completed.length === 0 && <p className="rounded-2xl border border-border bg-bg2 px-4 py-3 text-sm text-dim">{t("today.completedEmpty")}</p>}
               {completed.map((ev) => (
@@ -160,6 +217,53 @@ function Today() {
           </div>
         </section>
       </div>
+    </div>
+  );
+}
+
+function RescheduleOffer({
+  ev,
+  onTomorrow,
+  onWeek,
+  onPick,
+  onSkip,
+}: {
+  ev: NowEvent;
+  onTomorrow: () => void;
+  onWeek: () => void;
+  onPick: () => void;
+  onSkip: () => void;
+}) {
+  const t = useT();
+  return (
+    <div className="space-y-2 rounded-2xl border border-border2 bg-card px-3 py-3 text-foreground">
+      <p className="text-sm font-semibold">{t("today.rescheduleAsk", { title: ev.title })}</p>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" className="h-10 rounded-xl border border-border2 text-xs font-semibold" onClick={onTomorrow}>{t("goal.tomorrow")}</button>
+        <button type="button" className="h-10 rounded-xl border border-border2 text-xs font-semibold" onClick={onWeek}>{t("goal.week")}</button>
+      </div>
+      <button type="button" className="h-10 w-full rounded-xl border border-border2 text-xs font-semibold" onClick={onPick}>{t("today.pickWhen")}</button>
+      <button type="button" className="h-10 w-full text-xs font-semibold text-muted-foreground" onClick={onSkip}>{t("today.noThanks")}</button>
+    </div>
+  );
+}
+
+function AskRow({ ev, onYes, onNo }: { ev: NowEvent; onYes: () => void; onNo: () => void }) {
+  const t = useT();
+  const locale = useLocale();
+  return (
+    <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3 py-3">
+      <span className={cn("h-8 w-1 shrink-0 rounded-full", barColor[ev.color])} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold">{ev.title}</p>
+        <p className="text-xs text-muted-foreground">{formatLocaleTime(ev.time, locale)}</p>
+      </div>
+      <button type="button" aria-label={t("today.askYes")} onClick={onYes} className="grid size-9 place-items-center rounded-full border border-green/50 bg-green/15 text-green">
+        <Check className="size-4" />
+      </button>
+      <button type="button" aria-label={t("today.askNo")} onClick={onNo} className="grid size-9 place-items-center rounded-full border border-border2 bg-background text-muted-foreground">
+        <X className="size-4" />
+      </button>
     </div>
   );
 }

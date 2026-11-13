@@ -29,6 +29,8 @@ export interface NowEvent {
   tag: string;
   color: EventColor;
   done: boolean;
+  /** The person said this passed time did not get done. It stays unfinished. */
+  missed?: "no";
   steps?: Step[];
   nudges: Nudges;
   /**

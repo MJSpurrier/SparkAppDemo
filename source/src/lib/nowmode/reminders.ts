@@ -6,6 +6,7 @@ import { NUDGE_TIERS, eventDate, toDateKey, type NudgeKey } from "./logic";
 import { eventEndMs } from "./schedule";
 import { DEFAULT_QUIET_END, DEFAULT_QUIET_START, effectiveBoardReviewTime, isQuietAt, nudgeTierAllowed } from "./settings";
 import { checkInClock, checkInMoment, goalReminderAt } from "./goals";
+import { presenceCopy, nextScheduledAfter } from "./today-flow";
 import type { FocusState, Goal, NowEvent, Prefs } from "./types";
 
 /** How far ahead a closed app can be given reminders. The list is rebuilt on every edit. */
@@ -113,15 +114,19 @@ export function planReminders(input: ReminderInput): PlannedNotification[] {
         const at = start - tier.offsetMin * 60_000;
         const when = new Date(at);
         if (quietAt(input.prefs, when)) continue;
+        const nudgeBody = translate(input.locale, `nudge.${tier.key}`, {
+          title: ev.title,
+          time: formatLocaleTime(ev.time, input.locale),
+        });
+        const body = tier.key === "now"
+          ? presenceCopy(input.locale, `${ev.id}:${ev.date}`, nextScheduledAfter(input.events, ev))
+          : nudgeBody;
         push(
           draft(
             `nudge:${ev.id}:${tier.key}:${at}`,
             at,
             title,
-            translate(input.locale, `nudge.${tier.key}`, {
-              title: ev.title,
-              time: formatLocaleTime(ev.time, input.locale),
-            }),
+            body,
             sound,
             "nudge",
           ),
