@@ -18,19 +18,19 @@ import { ScheduleTypeField } from "./ScheduleTypeField";
 import { useUI } from "./ui-context";
 
 export function ScheduleDialog() {
-  const { scheduleEventId, closeSchedule } = useUI();
+  const { scheduleEventId, scheduleCopy, closeSchedule } = useUI();
   const { state, commitSchedule } = useNowMode();
   const ev = state.events.find((e) => e.id === scheduleEventId) ?? null;
 
   if (!scheduleEventId || !ev) return null;
 
-  return <ScheduleForm key={ev.id + ev.date + ev.time + ev.duration + ev.schedule} eventId={ev.id} onClose={closeSchedule} />;
+  return <ScheduleForm key={ev.id + ev.date + ev.time + ev.duration + ev.schedule + String(scheduleCopy)} eventId={ev.id} copy={scheduleCopy} onClose={closeSchedule} />;
 }
 
-function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => void }) {
+function ScheduleForm({ eventId, copy, onClose }: { eventId: string; copy: boolean; onClose: () => void }) {
   const t = useT();
   const locale = useLocale();
-  const { state, commitSchedule, skipOccurrence, deleteSeries } = useNowMode();
+  const { state, commitSchedule, placeFollowUp, skipOccurrence, deleteSeries } = useNowMode();
   const ev = state.events.find((e) => e.id === eventId);
   const [date, setDate] = useState(ev?.date ?? "");
   const [time, setTime] = useState(ev?.time ?? "");
@@ -62,7 +62,7 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
   if (!ev) return null;
 
   const fixed = schedule === "fixed";
-  const title = fixed ? t("schedule.move") : t("schedule.edit");
+  const title = copy ? t("schedule.another") : fixed ? t("schedule.move") : t("schedule.edit");
   const endLabel =
     valid.ok && parsedDuration != null ? formatLocaleTime(eventEndClock({ date, time, duration: parsedDuration }), locale) : null;
 
@@ -71,7 +71,9 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
       setError(explainScheduleError(locale, valid));
       return;
     }
-    const result = commitSchedule(ev.id, { date, time, duration: parsedDuration, schedule, scope: ev.seriesId ? scope : "one" });
+    const result = copy
+      ? placeFollowUp(ev.id, { date, time, duration: parsedDuration })
+      : commitSchedule(ev.id, { date, time, duration: parsedDuration, schedule, scope: ev.seriesId ? scope : "one" });
     if (!result.ok) {
       setError(explainScheduleError(locale, result));
       return;
@@ -100,7 +102,7 @@ function ScheduleForm({ eventId, onClose }: { eventId: string; onClose: () => vo
           }}
         >
           <ScheduleTypeField value={schedule} onChange={setSchedule} name={`schedule-${ev.id}`} />
-          {ev.seriesId && (
+          {ev.seriesId && !copy && (
             <div className="space-y-2">
               <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label={t("recur.scopeSeries")}>
                 {(["one", "series"] as const).map((item) => (

@@ -35,6 +35,7 @@ import {
 import { creditFocusSession } from "./focus-credit";
 import { deleteSeriesKeepingHistory, editSeriesScope, materializeSeries, removeOccurrence, skipOneOccurrence } from "./recurrence";
 import { checkInFire, goalReminderFire } from "./goals";
+import { freshOccurrence, hasClockTime, nextAfterClock, nextScheduledAfter, presenceCopy } from "./today-flow";
 import { stateForVisit } from "./seed";
 import type { RecurrenceRule } from "./types";
 import {
@@ -159,6 +160,8 @@ interface Store {
   setEnergy: (e: Energy) => void;
   addEvent: (e: Omit<NowEvent, "id" | "done" | "nudges" | "schedule"> & Partial<Pick<NowEvent, "nudges" | "schedule">>) => NowEvent;
   toggleDone: (id: string) => void;
+  declineTask: (id: string) => void;
+  placeFollowUp: (id: string, input: { date: string; time: string; duration?: number }) => { ok: true } | { ok: false; message: string };
   splitTask: (id: string) => void;
   setSteps: (id: string, steps: NowEvent["steps"]) => void;
   addBigWin: (input: { label: string; date: string; note?: string }) => void;
@@ -234,6 +237,22 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
     if (!ready || import.meta.env.VITE_NATIVE !== "1") return;
     void syncNativeReminders(stateRef.current).catch(() => {});
   }, [ready, state.events, state.goals, state.prefs, state.focus.endsAt, state.focus.running, state.focus.label]);
+
+  const focusBoot = useRef(false);
+  useEffect(() => {
+    if (!ready) return;
+    if (!focusBoot.current) {
+      focusBoot.current = true;
+      return;
+    }
+    const focus = state.focus;
+    if (!focus.running || !focus.endsAt) return;
+    if (quietNow(state.prefs)) return;
+    const locale = localeOf(state.prefs);
+    const todayKey = toDateKey(new Date());
+    const next = nextAfterClock(state.events, todayKey, new Date());
+    toast(translate(locale, "presence.title"), { description: presenceCopy(locale, `focus:${focus.endsAt}`, next) });
+  }, [ready, state.focus.running, state.focus.endsAt]);
 
   useEffect(() => {
     if (!ready) return;
@@ -403,11 +422,26 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
           const diff = now.getTime() - target;
           if (diff >= 0 && diff < 5 * 60_000) {
             fired.push(key);
+            if (tier.key === "now") fired.push(`presence:${ev.id}:${ev.date}`);
             if (!quietNow(s.prefs, now)) {
               const locale = localeOf(s.prefs);
-              notify(translate(locale, `nudge.${tier.key}`, { title: ev.title, time: formatLocaleTime(ev.time, locale) }));
+              const nudge = translate(locale, `nudge.${tier.key}`, { title: ev.title, time: formatLocaleTime(ev.time, locale) });
+              const here = presenceCopy(locale, `${ev.id}:${tier.key}`, nextScheduledAfter(s.events, ev));
+              notify(tier.key === "now" ? here : `${nudge}\n${here}`);
             }
           }
+        }
+      }
+      for (const ev of s.events) {
+        if (ev.done || !hasClockTime(ev)) continue;
+        const key = `presence:${ev.id}:${ev.date}`;
+        if (fired.includes(key) || s.firedNudges.includes(key)) continue;
+        const diff = now.getTime() - eventDate(ev).getTime();
+        if (diff < 0 || diff >= 5 * 60_000) continue;
+        fired.push(key);
+        if (!quietNow(s.prefs, now)) {
+          const locale = localeOf(s.prefs);
+          notify(presenceCopy(locale, `${ev.id}:start`, nextScheduledAfter(s.events, ev)));
         }
       }
       const review = boardReviewFire(now, s.prefs, [...s.firedNudges, ...fired]);
@@ -452,6 +486,16 @@ export function NowModeProvider({ children }: { children: ReactNode }) {
         };
         update((s) => ({ ...s, events: [...s.events, full] }));
         return full;
+      },
+      declineTask: (id) => updateEvent(id, (ev) => ({ ...ev, done: false, missed: "no" })),
+      placeFollowUp: (id, input) => {
+        const ev = stateRef.current.events.find((item) => item.id === id);
+        if (!ev) return { ok: false, message: "missing" };
+        const check = validateSlot({ date: input.date, time: input.time, duration: input.duration ?? ev.duration });
+        if (!check.ok) return check;
+        const copy = freshOccurrence(ev, { date: input.date, time: normalizeTime(input.time), duration: input.duration ?? ev.duration }, uid());
+        update((s) => ({ ...s, events: [...s.events, copy] }));
+        return { ok: true };
       },
       toggleDone: (id) => {
         const ev = stateRef.current.events.find((e) => e.id === id);

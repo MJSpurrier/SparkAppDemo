@@ -1,8 +1,8 @@
 /* Now Mode service worker.
-   nowmode-v10 drops older shells so this build installs cleanly.
+   nowmode-v11 drops older shells so this build installs cleanly.
    The app shell is network-first so a returning tester gets this version.
 */
-const CACHE = "nowmode-v10";
+const CACHE = "nowmode-v11";
 const SHELL = [
   "/SparkAppDemo/",
   "/SparkAppDemo/index.html",

@@ -261,6 +261,7 @@ export function migrateEvent(raw: Partial<NowEvent>): NowEvent {
     tag: raw.tag ?? "Capture",
     color: raw.color ?? "blue",
     done: !!raw.done,
+    missed: raw.missed === "no" ? "no" : undefined,
     steps: raw.steps,
     nudges: {
       day: !!nudges.day,

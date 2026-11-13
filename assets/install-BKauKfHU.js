@@ -1,0 +1,1 @@
+import{u as a,w as i,j as s,ai as n}from"./index-Cm5IM9tZ.js";import{S as o}from"./ScreenHeader-DFI33bjv.js";function c(){const e=a(),t=i();return s.jsxs("div",{className:"pb-10",children:[s.jsx(o,{back:!0,title:e("install.title")}),s.jsx("div",{className:"px-5",children:s.jsx(n,{onBrowser:()=>void t({to:"/"})})})]})}export{c as component};

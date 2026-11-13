@@ -14,7 +14,9 @@ interface UIState {
   openSheet: (mode?: SheetMode, tab?: SheetTab) => void;
   closeSheet: () => void;
   scheduleEventId: string | null;
+  scheduleCopy: boolean;
   openSchedule: (id: string) => void;
+  openScheduleCopy: (id: string) => void;
   closeSchedule: () => void;
   timerRequest: TimerRequest;
   askTimer: (req: Exclude<TimerRequest, null>) => void;
@@ -36,6 +38,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
   const [sheetMode, setSheetMode] = useState<SheetMode>("all");
   const [sheetTab, setSheetTab] = useState<SheetTab>("menu");
   const [scheduleEventId, setScheduleEventId] = useState<string | null>(null);
+  const [scheduleCopy, setScheduleCopy] = useState(false);
   const [timerRequest, setTimerRequest] = useState<TimerRequest>(null);
   const [stepsEventId, setStepsEventId] = useState<string | null>(null);
   const [captureDraft, setCaptureDraft] = useState<{ text: string; cardId: string } | null>(null);
@@ -67,8 +70,19 @@ export function UIProvider({ children }: { children: ReactNode }) {
         setSheetOpen(true);
       },
       scheduleEventId,
-      openSchedule: (id: string) => setScheduleEventId(id),
-      closeSchedule: () => setScheduleEventId(null),
+      scheduleCopy,
+      openSchedule: (id: string) => {
+        setScheduleCopy(false);
+        setScheduleEventId(id);
+      },
+      openScheduleCopy: (id: string) => {
+        setScheduleCopy(true);
+        setScheduleEventId(id);
+      },
+      closeSchedule: () => {
+        setScheduleCopy(false);
+        setScheduleEventId(null);
+      },
       timerRequest,
       askTimer: (req) => setTimerRequest(req),
       closeTimerRequest: () => setTimerRequest(null),
@@ -82,7 +96,7 @@ export function UIProvider({ children }: { children: ReactNode }) {
         setTutorialNonce((n) => n + 1);
       },
     }),
-    [drawerOpen, sheetOpen, sheetMode, sheetTab, scheduleEventId, timerRequest, stepsEventId, captureDraft, tutorialNonce],
+    [drawerOpen, sheetOpen, sheetMode, sheetTab, scheduleEventId, scheduleCopy, timerRequest, stepsEventId, captureDraft, tutorialNonce],
   );
 
   return <UICtx.Provider value={value}>{children}</UICtx.Provider>;
