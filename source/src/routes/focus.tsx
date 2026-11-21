@@ -57,7 +57,6 @@ function SessionTitle({
   }, [edited, label]);
   return (
     <div className="mt-5 text-center">
-      <p className="text-sm text-muted-foreground">{t("focus.amplifying")}</p>
       {linked ? (
         <h1 className="mt-1 px-6 text-[22px] font-bold leading-tight">{label || t("focus.fallback")}</h1>
       ) : (
@@ -160,9 +159,6 @@ function FocusScreen() {
         <div className="px-5 text-center">
           <p className="text-xs text-muted-foreground">
             {formatLocaleTime(linkedEvent.time, locale)} – {formatLocaleTime(eventEndClock(linkedEvent), locale)}
-          </p>
-          <p className="mt-1 text-xs leading-relaxed text-dim">
-            {t("focus.blockNote")}
           </p>
         </div>
       )}
