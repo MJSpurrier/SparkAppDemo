@@ -1,9 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Bell, BellRing, Check, ChevronDown, Clock3, Moon, Scissors, Sparkles, X, Zap } from "lucide-react";
+import { Bell, BellRing, Check, ChevronDown, Clock3, Moon, Plus, Scissors, Sparkles, X, Zap } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
-import { localizedTag, useLocale, useT } from "@/lib/i18n/context";
+import { useLocale, useT } from "@/lib/i18n/context";
 import { formatLocaleDate, formatLocaleTime } from "@/lib/i18n/format";
 import { barColor } from "@/components/nowmode/colors";
 import { Loading } from "@/components/nowmode/Loading";
@@ -368,10 +368,9 @@ function AllClearCard() {
     <section className="rounded-[20px] border border-border2 bg-hero p-5 shadow-card">
       <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-green">{t("today.allClear")}</p>
       <h2 className="mt-1 text-xl font-bold">{t("today.clearTitle")}</h2>
-      <p className="mt-1 text-sm text-muted-foreground">{t("today.clearBody")}</p>
-      <Button variant="secondary" className="mt-4 h-11 w-full rounded-xl" onClick={() => openSheet("all")}>
-        {t("today.capture")}
-      </Button>
+      <button type="button" aria-label={t("today.capture")} onClick={() => openSheet("all")} className="mt-4 grid size-11 place-items-center rounded-xl border border-border2 bg-card text-foreground">
+        <Plus className="size-5" />
+      </button>
     </section>
   );
 }
@@ -397,8 +396,6 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
   const personalActive = !flexible && f.eventId === ev.id && !f.linkedToBlock && (f.running || (f.remainingSec < f.totalSec && !f.finished));
   const timed = hasDuration(ev);
   const block = timed ? planBlockTimer(ev, now) : { remainingSec: 0, endsAt: 0, ended: false };
-  const energyCopy = state.energy ? t(state.energy === "low" ? "energy.low" : state.energy === "okay" ? "energy.okay" : "energy.high") : t("energy.none");
-
   const goSprint = (minutes: number) => {
     unlockAlarm();
     if (focusBusy(f) && (f.eventId !== ev.id || f.linkedToBlock)) {
@@ -441,7 +438,7 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
       </div>
       <h2 className="mt-1 text-[22px] font-bold leading-tight">{ev.title}</h2>
       <p className="mt-0.5 text-sm text-muted-foreground">
-        {localizedTag(locale, ev.tag)} · {formatLocaleTime(ev.time, locale)}
+        {formatLocaleTime(ev.time, locale)}
         {timed ? ` – ${formatLocaleTime(eventEndClock(ev), locale)}` : ""}
       </p>
 
@@ -464,19 +461,8 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
           <p className="text-[32px] font-bold tabular-nums leading-none tracking-tight">
             {showCountdown ? formatMMSS(shownRemaining) : formatLocaleTime(ev.time, locale)}
           </p>
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            {!timed
-              ? t("duration.none")
-              : flexible
-                ? block.ended
-                  ? t("today.ended", { time: formatLocaleTime(eventEndClock(ev), locale), clock: formatLocaleTime(`${now.getHours()}:${now.getMinutes()}`, locale) })
-                  : t("today.until", { time: formatLocaleTime(eventEndClock(ev), locale), clock: formatLocaleTime(`${now.getHours()}:${now.getMinutes()}`, locale) })
-                : t("today.ofMin", { n: ev.duration ?? 0, clock: formatLocaleTime(`${now.getHours()}:${now.getMinutes()}`, locale) })}
-          </p>
         </div>
       </div>
-
-      <p className="mt-4 text-sm text-foreground/85">{energyCopy}</p>
 
       <div className="mt-4 grid grid-cols-2 gap-3">
         {timed &&
@@ -555,7 +541,6 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
 
       {showNudges && (
         <div className="mt-4 space-y-3 rounded-2xl border border-border bg-background/40 p-3">
-          <p className="text-xs text-muted-foreground">{t("today.nudgeHint")}</p>
           <div className="grid grid-cols-4 gap-2">
             {NUDGE_TIERS.map((tier) => (
               <button
@@ -571,7 +556,6 @@ function UpNext({ ev, now }: { ev: NowEvent; now: Date }) {
                 )}
               >
                 <span className="block text-xs font-semibold">{t(tier.key === "day" ? "nudge.layer.day" : tier.key === "hour" ? "nudge.layer.hour" : tier.key === "ten" ? "nudge.layer.ten" : "nudge.layer.now")}</span>
-                <span className="block text-[10px] opacity-80">{t(tier.key === "day" ? "nudge.word.day" : tier.key === "hour" ? "nudge.word.hour" : tier.key === "ten" ? "nudge.word.ten" : "nudge.word.now")}</span>
               </button>
             ))}
           </div>

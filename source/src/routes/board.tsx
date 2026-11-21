@@ -6,8 +6,10 @@ import { toast } from "sonner";
 import { useT } from "@/lib/i18n/context";
 import { formatLocaleTime } from "@/lib/i18n/format";
 import { useLocale } from "@/lib/i18n/context";
+import { ImageViewer } from "@/components/nowmode/ImageViewer";
 import { Loading } from "@/components/nowmode/Loading";
-import { Pill, ScreenHeader } from "@/components/nowmode/ScreenHeader";
+import { ScreenHeader } from "@/components/nowmode/ScreenHeader";
+import { boardPhotos } from "@/lib/nowmode/viewer";
 import { useUI } from "@/components/nowmode/ui-context";
 import { DEFAULT_QUIET_START, effectiveBoardReviewTime } from "@/lib/nowmode/settings";
 import { useNowMode } from "@/lib/nowmode/store";
@@ -45,12 +47,13 @@ function BoardScreen() {
   const t = useT();
   const { ready, state, moveCard, removeCard } = useNowMode();
   const { openSheet, openCardSchedule } = useUI();
-  const locale = useLocale();
   const canvasRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [scale, setScale] = useState(1);
+  const [viewer, setViewer] = useState<number | null>(null);
+  const photos = boardPhotos(state.cards);
 
   if (!ready) return <Loading />;
 
@@ -88,7 +91,7 @@ function BoardScreen() {
 
   return (
     <div className="flex h-full flex-col">
-      <ScreenHeader title={t("nav.board")} right={<Pill>{t("board.hint")}</Pill>} />
+      <ScreenHeader title={t("nav.board")} />
 
       <div data-tour="board" className="relative mx-5 min-h-0 flex-1 overflow-hidden rounded-[20px] border border-border2 bg-cork shadow-card">
         <div className="cork-grain pointer-events-none absolute inset-0" />
@@ -123,7 +126,18 @@ function BoardScreen() {
                   </p>
                   {c.kind === "photo" &&
                     (c.image ? (
-                      <img src={c.image} alt={c.text} draggable={false} className="mt-1.5 h-16 w-full rounded-md object-cover" />
+                      <img
+                        src={c.image}
+                        alt={c.text}
+                        draggable={false}
+                        className="mt-1.5 h-16 w-full rounded-md object-cover"
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          const at = photos.findIndex((photo) => photo.id === c.id);
+                          if (at >= 0) setViewer(at);
+                        }}
+                      />
                     ) : (
                       <div className="mt-1.5 grid h-10 place-items-center rounded-md bg-background/50 text-dim">
                         <ImageIcon className="size-4" />
@@ -208,6 +222,9 @@ function BoardScreen() {
         </button>
       </div>
       {reviewOpen && <ReviewSheet onClose={() => setReviewOpen(false)} />}
+      {viewer != null && photos.length > 0 && (
+        <ImageViewer images={photos} index={viewer} onIndex={setViewer} onClose={() => setViewer(null)} />
+      )}
     </div>
   );
 }
